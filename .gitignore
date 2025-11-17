@@ -1,0 +1,12 @@
+/.metadata/
+/zephyrproject/.west/
+/zephyrproject/.venv/
+/zephyrproject/bootloader/
+/zephyrproject/modules/
+/zephyrproject/tools/
+/zephyrproject/zephyr/
+/zephyrproject/z_wasm3_bench/
+/zephyrproject/z_wamr_interp_bench/
+/zephyrproject/z_wamr_aot_bench/
+**/Debug/
+**/build/

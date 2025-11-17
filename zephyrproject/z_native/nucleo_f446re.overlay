@@ -24,3 +24,15 @@
 	apb1-prescaler = <4>;  /* 45 MHz */
 	apb2-prescaler = <2>;  /* 90 MHz */
 };
+
+&spi1 {
+    status = "disabled";
+};
+
+&timers2 {
+    status = "disabled";
+};
+
+&pwm2 {
+    status = "disabled";
+};

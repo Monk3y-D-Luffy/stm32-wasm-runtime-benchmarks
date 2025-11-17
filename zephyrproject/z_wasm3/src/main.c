@@ -3,8 +3,9 @@
 #include "wasm3.h"
 #include "toggle.wasm.h"
 
+static uint32_t s;
 m3ApiRawFunction(host_gpio_toggle) {
-    static uint32_t s;
+    
     s ^= 1u;
     if (s) GPIOA->BSRR = (1u << 5);
     else   GPIOA->BSRR = (1u << (5 + 16));

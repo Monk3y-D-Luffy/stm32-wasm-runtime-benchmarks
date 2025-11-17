@@ -26,12 +26,14 @@ static inline void gpio_pa5_init(void) {
     GPIOA->OSPEEDR = (GPIOA->OSPEEDR & ~(3u << (5*2))) | (3u << (5*2)); // very high
 }
 
+
+static uint32_t s;
 /* ===== Native API: env.gpio_toggle() ===== */
 static void
 gpio_toggle(wasm_exec_env_t exec_env)
 {
     (void)exec_env;
-    static uint32_t s;
+    
     s ^= 1u;
     if (s) {
         GPIOA->BSRR = (1u << 5);

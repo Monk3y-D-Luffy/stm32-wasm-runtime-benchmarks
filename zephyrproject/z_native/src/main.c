@@ -16,5 +16,6 @@ void main(void)
             GPIOA->BSRR = (1u << 5);
         else
             GPIOA->BSRR = (1u << (5 + 16));
+    //for (volatile int i=0; i<6000000; i++);
     }
 }
