@@ -9,4 +9,5 @@
 /zephyrproject/z_wamr_interp_bench/
 /zephyrproject/z_wamr_aot_bench/
 **/Debug/
+**/Release/
 **/build/

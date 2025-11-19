@@ -90,7 +90,7 @@ static void run_wasm_toggle_forever(void) {
     IM3Environment env = m3_NewEnvironment();
     if (!env) while(1){}
 
-    IM3Runtime rt = m3_NewRuntime(env, 8*1024, NULL);
+    IM3Runtime rt = m3_NewRuntime(env, 2*1024, NULL);
     if (!rt) while(1){}
 
     IM3Module mod = NULL;
