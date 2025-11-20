@@ -23,7 +23,7 @@
 
 volatile uint32_t total_cycles_wasm = 0;
 volatile uint32_t avg_cycles_wasm   = 0;
-volatile float    checksum_wasm     = 0.0f;
+
 
     
    
@@ -64,16 +64,15 @@ static void run_wasm_fft_benchmark(void) {
 
 	IM3Function fn_init = NULL;
 	IM3Function fn_bench = NULL;
-	IM3Function fn_checksum = NULL;
+	
 
-	r = m3_FindFunction(&fn_init, rt, "init_buffer");
+	r = m3_FindFunction(&fn_init, rt, "fft_init");
 	if (r || !fn_init) wasm_panic("m3_FindFunction(init_buffer)", r);
 
-	r = m3_FindFunction(&fn_bench, rt, "bench");
+	r = m3_FindFunction(&fn_bench, rt, "fft_bench");
 	if (r || !fn_bench) wasm_panic("m3_FindFunction(bench)", r);
 
-	r = m3_FindFunction(&fn_checksum, rt, "get_checksum");
-	if (r || !fn_checksum) wasm_panic("m3_FindFunction(get_checksum)", r);
+
 
 	// Inizializzazione DWT e disabilitazione SysTick/IRQ per confronto pulito
 	DWT_Init();
@@ -104,22 +103,7 @@ static void run_wasm_fft_benchmark(void) {
 	printk("Total cycles: %lu\r\n", (unsigned long)total_cycles_wasm);
 	printk("Avg cycles per FFT: %lu\r\n", (unsigned long)avg_cycles_wasm);
 
-	// Leggi anche il checksum per evitare ottimizzazioni e avere un controllo
-	r = m3_CallV(fn_checksum);
-	if (r) wasm_panic("m3_CallV(get_checksum)", r);
-
-	float checksum = 0.0f;
-	r = m3_GetResultsV(fn_checksum, &checksum);
-	if (r) wasm_panic("m3_GetResultsV(get_checksum)", r);
-
-	checksum_wasm = checksum;
-
-	// Se vuoi, puoi stampare via UART (se hai _write/printf configurati):
-	// printf("WASM FFT-like\r\n");
-	// printf("Total cycles: %lu\r\n", (unsigned long)total_cycles_wasm);
-	// printf("Avg cycles per FFT: %lu\r\n", (unsigned long)avg_cycles_wasm);
-	// printf("Checksum: %f\r\n", checksum_wasm);
-
+	
 	// cleanup opzionale (tanto poi non usciamo da main)
 	m3_FreeRuntime(rt);
 	m3_FreeEnvironment(env);

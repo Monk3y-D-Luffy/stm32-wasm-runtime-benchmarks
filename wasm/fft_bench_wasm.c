@@ -1,17 +1,27 @@
-#include <zephyr/kernel.h>
-#include <stm32f4xx.h>
+#include <stdint.h>
 
-#define N_FFT     1024
-#define NUM_ITER  100
+
+#define N_FFT 1024
+
+
+#if defined(__wasm__) || defined(__wasm)
+#  define WASM_EXPORT(name) __attribute__((export_name(name)))
+#else
+#  define WASM_EXPORT(name)
+#endif
 
 static float buf[2 * N_FFT];
 
-#include "twiddle1024.h"
+/* ---------------------------------------------------------
+ * Twiddle table (cos,sin) precomputata offline per N=1024
+ * --------------------------------------------------------- */
+#include "twiddle1024.h"   /* contiene float twiddle_cos[512], twiddle_sin[512] */
 
-volatile uint32_t total_cycles = 0;
-volatile uint32_t avg_cycles   = 0;
-
-static void fft_init(void)
+/* ---------------------------------------------------------
+ * Init buffer
+ * --------------------------------------------------------- */
+WASM_EXPORT("fft_init")
+void fft_init(void)
 {
     for (int i = 0; i < N_FFT; ++i) {
         float x = (float)i;
@@ -20,6 +30,9 @@ static void fft_init(void)
     }
 }
 
+/* ---------------------------------------------------------
+ * Bit reversal
+ * --------------------------------------------------------- */
 static void bit_reverse(float *b)
 {
     int j = 0;
@@ -38,6 +51,9 @@ static void bit_reverse(float *b)
     }
 }
 
+/* ---------------------------------------------------------
+ * Radix-2 FFT
+ * --------------------------------------------------------- */
 static void fft_radix2(float *b)
 {
     bit_reverse(b);
@@ -73,7 +89,13 @@ static void fft_radix2(float *b)
     }
 }
 
+/* ---------------------------------------------------------
+ * API esportate per host WSAM3 / WAMR
+ * --------------------------------------------------------- */
 
+
+
+WASM_EXPORT("fft_bench")
 void fft_bench(int iterations)
 {
     for (int k = 0; k < iterations; ++k) {
@@ -82,54 +104,3 @@ void fft_bench(int iterations)
     }
 }
 
-
-
-//------------------------------
-// DWT cycle counter
-//------------------------------
-static void DWT_Init(void) {
-	// abilita il blocco di trace
-	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-	// azzera il contatore
-	DWT->CYCCNT = 0;
-	// abilita il contatore di cicli
-	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-}
-
-void run_benchmark(void) {
-    DWT_Init();
-    fft_init();
-
-    uint32_t start = DWT->CYCCNT;
-    fft_bench(NUM_ITER);
-    uint32_t end   = DWT->CYCCNT;
-
-    total_cycles = end - start;
-    avg_cycles   = total_cycles / NUM_ITER;
-}
-
-void main(void)
-{
-   SysTick->CTRL = 0;   // disabilita SysTick
-	__disable_irq();     // opzionale se vuoi togliere tutte le IRQ
-
-	/* USER CODE END 2 */
-
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
-
-	run_benchmark();
-
-	printk("Zephyr\r\n");
-	printk("Total cycles: %lu\r\n", (unsigned long)total_cycles);
-	printk("Avg cycles per FFT: %lu\r\n", (unsigned long)avg_cycles);
-//printk("SystemCoreClock = %u Hz\n", SystemCoreClock);
-
-	while (1)
-	{
-		/* USER CODE END WHILE */
-
-		/* USER CODE BEGIN 3 */
-		__NOP(); // metti un breakpoint e guarda total_cycles / avg_cycles
-	}
-}

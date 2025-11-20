@@ -45,13 +45,13 @@ run_fft_bench(wasm_module_inst_t module_inst)
     uint32 argv[1];
 
     /* lookup funzioni esportate */
-    fn_init = wasm_runtime_lookup_function(module_inst, "init_buffer");
+    fn_init = wasm_runtime_lookup_function(module_inst, "fft_init");
     if (!fn_init) {
         printk("Failed to find init_buffer\n");
         return;
     }
 
-    fn_bench = wasm_runtime_lookup_function(module_inst, "bench");
+    fn_bench = wasm_runtime_lookup_function(module_inst, "fft_bench");
     if (!fn_bench) {
         printk("Failed to find bench\n");
         return;
