@@ -1,10 +1,10 @@
 ﻿# STM32 WASM Runtime Benchmarks
 
-Questo repository contiene una serie di esperimenti per confrontare le prestazioni di diversi stack di esecuzione su STM32F446RE, misurando:
+Questo repository contiene una serie di esperimenti per confrontare le prestazioni di diversi stack di esecuzione su **STM32F446RE (180 MHz)** e **STM32F746ZG (216 MHz)**, misurando:
 1. La frequenza massima di commutazione GPIO (toggle) tramite oscilloscopio.
 2. Le prestazioni su un algoritmo numerico reale (FFT radix-2 complessa).
 
-L’obiettivo è quantificare l’overhead introdotto da:
+L'obiettivo è quantificare l'overhead introdotto da:
 
 - Bare-metal C  
 - Bare-metal + WebAssembly (Wasm3)  
@@ -27,63 +27,28 @@ Il repository fornisce:
 
 ## Hardware utilizzato
 
-- **Scheda:** Nucleo-F446RE  
-- **MCU:** STM32F446RET6 (ARM Cortex-M4F @ 180 MHz)  
-- **Oscilloscopio:** Rigol MSO5104 
-- **Sonda:** sonda ×10  
-- **Collegamenti**: punta → PA5, cavo GND → GND
+| Scheda | MCU | Frequenza core | Oscilloscope | Sonda | Collegamenti |
+|--------|-----|----------------|--------------|-------|--------------|
+| **Nucleo-F446RE** | STM32F446RET6 (Cortex-M4F) | **180 MHz** | Rigol MSO5104 | ×10 | punta → PA5, GND → GND |
+| **Nucleo-F746ZG** | STM32F746ZGT6 (Cortex-M7) | **216 MHz** | Rigol MSO5104 | ×10 | punta → PA5, GND → GND |
 
 <br>
 
 ## Obiettivo del benchmark
 
-1. Toggle benchmark
-Misurare la frequenza massima di scrittura su GPIO (BSRR) in un loop infinito, per valutare l’overhead dei diversi runtime.
+1. **Toggle benchmark**  
+   Misurare la frequenza massima di scrittura su GPIO (BSRR) in un loop infinito, per valutare l'overhead dei diversi runtime.
 
-2. FFT benchmark
-
-Misurare le prestazioni di una FFT complessa radix-2 in-place (N=1024):
-- implementata in C portabile puro (nessuna intrinsics ARM)
-- identica per i test nativi e per i runtime Wasm
-- compilata:
-  - ARM nativo tramite GCC (STM32CubeIDE)
-  - Wasm interprete tramite clang → wasm32
-  - WAMR AOT tramite wamrc --target=thumbv7em
+2. **FFT benchmark**  
+   Misurare le prestazioni di una FFT complessa radix-2 in-place (N=1024):  
+   - implementata in C portabile puro (nessuna intrinsics ARM)  
+   - identica per i test nativi e per i runtime Wasm  
+   - compilata:  
+     - ARM nativo tramite GCC (STM32CubeIDE)  
+     - Wasm interprete tramite clang → wasm32  
+     - WAMR AOT tramite wamrc --target=thumbv7em  
 
 La FFT comprende bit-reversal, 10 stadi, twiddle factors precomputati e tutto il flusso Cooley–Tukey DIT.
-
-<br>
-
-## Organizzazione del repository
-```
-/
-├── baremetal/              # Progetti STM32CubeIDE bare-metal
-│   ├── bm_toggle/          
-│   ├── bm_wasm3/
-│   ├── bm_fft/
-│   └── bm_wasm3_fft/     
-│
-├── freertos/               # Progetti STM32CubeIDE con FreeRTOS
-│   ├── frt_toggle/
-│   ├── frt_wasm3/
-│   ├── frt_fft/
-│   └── frt_wasm3_fft/
-│
-├── zephyrproject/          # Progetti basati su Zephyr (west build)
-│   ├── z_native/            
-│   ├── z_wasm3/            
-│   ├── z_wamr_interp/      
-│   ├── z_wamr_aot/
-│   ├── z_native_fft/ 
-│   ├── z_wasm3_fft/ 
-│   ├── z_wamr_interp_fft/ 
-│   ├── z_wamr_aot_fft/          
-│   └── wasm-micro-runtime  # Runtime WAMR vendorizzato (sorgenti locali)
-│
-├── wasm/                   # Bytecode, header
-│   
-└── README.md
-```
 
 <br>
 
@@ -158,29 +123,50 @@ xxd -i fft_bench.aot > fft_bench_aot.h
 
 <br>
 
-## Risultati sperimentali – Toggle Benchmark(PA5, ~180 MHz core)
+## Risultati sperimentali – Toggle Benchmark (PA5, ~180 MHz core)
 
-| Stack                     | Frequenza misurata |
-|---------------------------|--------------------|
-| Bare-metal                | **~36.4 MHz**      |
-| FreeRTOS                  | **~36.4 MHz**      |
-| Zephyr                    | **~36 MHz**        |
-| Bare-metal + Wasm3        | **~502 kHz**       |
-| FreeRTOS + Wasm3          | **~564 kHz**       |
-| Zephyr + Wasm3            | **~523 kHz**       |
-| Zephyr + WAMR (interp.)   | **~207 kHz**       |
-| Zephyr + WAMR (AOT)       | **~346 kHz**       |
+| Stack            | Runtime / Modalità | Frequenza misurata | Slowdown vs C bare-metal |
+|------------------|--------------------|--------------------|--------------------------|
+| Bare-metal       | C nativo           | **~36.4 MHz**      | **1.00×**                |
+| FreeRTOS         | C nativo           | **~36.4 MHz**      | **1.00×**                |
+| Zephyr           | C nativo           | **~36 MHz**        | **1.01×**                |
+| Bare-metal       | wasm3 (interprete) | **~502 kHz**       | **72.5×**                |
+| FreeRTOS         | wasm3 (interprete) | **~564 kHz**       | **64.5×**                |
+| Zephyr           | wasm3 (interprete) | **~523 kHz**       | **69.6×**                |
+| Zephyr           | WAMR (interprete)  | **~207 kHz**       | **175.8×**               |
+| Zephyr           | WAMR (AOT)         | **~346 kHz**       | **105.2×**               |
 
-Note:
+
+**Note Toggle F446RE:**
 
 - I tre casi “nativi” (Bare-metal, FreeRTOS, Zephyr) sono allineati a ~36 MHz, in pratica al limite di quanto il core riesce a togglare scrivendo su BSRR.
 - L’overhead del kernel (FreeRTOS/Zephyr) è trascurabile rispetto al loop tight di toggle.
 - Wasm3 introduce un fattore di rallentamento ≈ **70×** rispetto al nativo.
 - WAMR interprete è più lento di Wasm3 nel setup corrente.
 - WAMR AOT migliora nettamente sul suo interprete, ma resta più lento di Wasm3 con la configurazione attuale.
-- anomalia: wasm3 sembra più veloce su un rtos rispetto al baremetal (da indagare bene)
-- wamr non è disponibile baremetal su nessuna piattaforma, è disponibile per zephyr su nucleo, è disponibile su freertos solo per esp-idf
-- aot significa compilare il codice wasm in codice nativo; viene utilizzato solo il runtime wasm che si occupa di gestire il processo, ma non c'è interpretazione
+- Anomalia: wasm3 sembra più veloce su un rtos rispetto al baremetal (da indagare bene)
+- WAMR non è disponibile baremetal su nessuna piattaforma, è disponibile per zephyr su nucleo, è disponibile su freertos solo per esp-idf
+- AOT significa compilare il codice wasm in codice nativo; viene utilizzato solo il runtime wasm che si occupa di gestire il processo, ma non c'è interpretazione
+
+<br>
+
+## Risultati sperimentali – Toggle Benchmark (F746ZG, ~216 MHz core)
+
+| Stack            | Frequenza misurata | con cache     | Slowdown vs C nativo |
+|------------------|--------------------|---------------|----------------------|
+| Bare-metal       | **~110 MHz**       | **110 MHz**   | **1.00x**            |
+| FreeRTOS         | **~110 MHz**       | **110 MHz**   | **1.00x**            |
+| Zephyr           | **~108 MHz**       | **108 MHz**   | **1.02x**            |
+| Bare-metal       | **~246 kHz**       | **908 kHz**   | **121.1x**           |
+| FreeRTOS         | **~264 kHz**       | **907 kHz**   | **121.3x**           |
+| Zephyr           | **310 kHz**        | **1.07 MHz**  | **102.8x**           |
+| Zephyr           | **~104 kHz**       | **334 kHz**   | **329.3x**           |
+| Zephyr           | **~162 kHz**       | **467 kHz**   | **235.6x**           |
+
+**Note Toggle F746ZG:**
+- Cortex-M7 con cache abilitate (I-cache, D-cache, prefetch) mostra toggle nativo ~3× più veloce (110 MHz vs 36 MHz).
+- Wasm3 beneficia enormemente delle cache (~4× speedup).
+- WAMR AOT con cache ~2.9× speedup vs senza.
 
 <br>
 
@@ -198,10 +184,10 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 | Zephyr       | WAMR (interprete)        | **13 567 746**     | **61.95×**               |
 | Zephyr       | WAMR (AOT)               | **3 341 702**      | **15.26×**               |                 
 
-Note:
-- Gli interpreti wasm (Wasm3 / WAMR) introducono un rallentamento 60–80× rispetto alla FFT nativa.
-- WAMR AOT riduce drasticamente l’overhead: ~15×, nonostante sia ancora un eseguibile sandboxato.
-- FreeRTOS e Zephyr introducono un overhead quasi nullo rispetto al bare-metal per questo tipo di workload numerico.
+**Note FFT:**
+- Interpreti wasm 60–80× slowdown.
+- WAMR AOT riduce a ~15×.
+- FreeRTOS/Zephyr overhead nullo.
 
 <br>
 
@@ -230,14 +216,18 @@ Progetti importabili direttamente in STM32CubeIDE.
 Installare Zephyr SDK + west (linee guida ufficiali):
 https://docs.zephyrproject.org/latest/develop/getting_started/index.html#getting-started
 
-Compilazione (esempio):
+**F446RE**:
 ```bash
-cd zephyrproject/z_native
+cd zephyrproject/z_native_f4
 west build . -b nucleo_f446re --pristine
+west flash
+
 ```
 
-Flash:
+**F746ZG:**
 ```bash
+cd zephyrproject/z_native_f7
+west build . -b nucleo_f746zg --pristine
 west flash
 
 ```
