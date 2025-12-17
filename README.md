@@ -206,7 +206,7 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 | Bare-metal   | wasm3 (interprete)       | **15 932 553**     | **128.4×**               |
 | FreeRTOS     | wasm3 (interprete)       | **13 962 748**     | **112.5×**               |
 | Zephyr       | wasm3 (interprete)       | **14 270 967**     | **115.0×**               |
-| Zephyr       | WAMR (interprete)        | **8 759 838**      | **70.5×**                |
+| Zephyr       | WAMR (interprete)        | **8 759 838**      | **70.6×**                |
 | Zephyr       | WAMR (AOT)               | **2 542 771**      | **20.5×**                |
 
 
