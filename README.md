@@ -213,7 +213,7 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 **Note FFT F746ZG:**
 - C nativo Bare-metal/FreeRTOS ~1.8× più veloce dell'F4 (124k vs 219k cicli).
 - Zephyr C nativo ha ~35% overhead vs bare-metal.
-- Tra gli interpreti Wasm, **WAMR** è il più veloce su F7 (~8.8M cicli, ~70× slowdown), seguito da wasm3 (~14–16M cicli).
+- Tra gli interpreti Wasm, WAMR è il più veloce su F7 (~8.8M cicli, ~70× slowdown), seguito da wasm3 (~14–16M cicli).
 - WAMR AOT riduce ulteriormente il gap, a ~20× slowdown rispetto al C nativo.
 
 <br>
@@ -256,5 +256,6 @@ west flash
 cd zephyrproject/z_native_f7
 west build . -b nucleo_f746zg --pristine
 west flash
+
 
 ```
