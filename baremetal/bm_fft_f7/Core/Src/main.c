@@ -43,8 +43,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 
-TIM_HandleTypeDef htim2;
-
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
@@ -62,7 +60,6 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
-static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -74,103 +71,107 @@ static void MX_TIM2_Init(void);
 //------------------------------
 static void fft_init(void)
 {
-    for (int i = 0; i < N_FFT; ++i) {
-        float x = (float)i;
-        buf[2 * i + 0] = x;
-        buf[2 * i + 1] = 0.5f * x;
-    }
+	for (int i = 0; i < N_FFT; ++i) {
+		float x = (float)i;
+		buf[2 * i + 0] = x;
+		buf[2 * i + 1] = 0.5f * x;
+	}
 }
 
 static void bit_reverse(float *b)
 {
-    int j = 0;
-    for (int i = 0; i < N_FFT; ++i) {
-        if (i < j) {
-            float tr = b[2*i+0];
-            float ti = b[2*i+1];
-            b[2*i+0]  = b[2*j+0];
-            b[2*i+1]  = b[2*j+1];
-            b[2*j+0]  = tr;
-            b[2*j+1]  = ti;
-        }
-        int bit = N_FFT >> 1;
-        while (j & bit) { j ^= bit; bit >>= 1; }
-        j |= bit;
-    }
+	int j = 0;
+	for (int i = 0; i < N_FFT; ++i) {
+		if (i < j) {
+			float tr = b[2*i+0];
+			float ti = b[2*i+1];
+			b[2*i+0]  = b[2*j+0];
+			b[2*i+1]  = b[2*j+1];
+			b[2*j+0]  = tr;
+			b[2*j+1]  = ti;
+		}
+		int bit = N_FFT >> 1;
+		while (j & bit) { j ^= bit; bit >>= 1; }
+		j |= bit;
+	}
 }
 
 static void fft_radix2(float *b)
 {
-    bit_reverse(b);
+	bit_reverse(b);
 
-    for (int len = 2; len <= N_FFT; len <<= 1) {
-        int half_len = len >> 1;
-        int stride   = N_FFT / len;
+	for (int len = 2; len <= N_FFT; len <<= 1) {
+		int half_len = len >> 1;
+		int stride   = N_FFT / len;
 
-        for (int i = 0; i < N_FFT; i += len) {
-            for (int j = 0; j < half_len; j++) {
-                int idx1 = i + j;
-                int idx2 = idx1 + half_len;
-                int k    = j * stride;
+		for (int i = 0; i < N_FFT; i += len) {
+			for (int j = 0; j < half_len; j++) {
+				int idx1 = i + j;
+				int idx2 = idx1 + half_len;
+				int k    = j * stride;
 
-                float wr = twiddle_cos[k];
-                float wi = twiddle_sin[k];
+				float wr = twiddle_cos[k];
+				float wi = twiddle_sin[k];
 
-                float xr = b[2*idx2+0];
-                float xi = b[2*idx2+1];
+				float xr = b[2*idx2+0];
+				float xi = b[2*idx2+1];
 
-                float tr = wr*xr - wi*xi;
-                float ti = wr*xi + wi*xr;
+				float tr = wr*xr - wi*xi;
+				float ti = wr*xi + wi*xr;
 
-                float ur = b[2*idx1+0];
-                float ui = b[2*idx1+1];
+				float ur = b[2*idx1+0];
+				float ui = b[2*idx1+1];
 
-                b[2*idx1+0] = ur + tr;
-                b[2*idx1+1] = ui + ti;
-                b[2*idx2+0] = ur - tr;
-                b[2*idx2+1] = ui - ti;
-            }
-        }
-    }
+				b[2*idx1+0] = ur + tr;
+				b[2*idx1+1] = ui + ti;
+				b[2*idx2+0] = ur - tr;
+				b[2*idx2+1] = ui - ti;
+			}
+		}
+	}
 }
 
 
 void fft_bench(int iterations)
 {
-    for (int k = 0; k < iterations; ++k) {
-        fft_radix2(buf);
-    }
+	for (int k = 0; k < iterations; ++k) {
+		fft_radix2(buf);
+	}
 }
 
 int _write(int file, char *ptr, int len)
 {
-    HAL_UART_Transmit(&huart3, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
+	HAL_UART_Transmit(&huart3, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+	return len;
 }
 
-
+static void DWT_Init(void) {
+	// abilita il blocco di trace
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	// azzera il contatore
+	DWT->CYCCNT = 0;
+	// abilita il contatore di cicli
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
 
 void run_benchmark(void)
 {
-    fft_init();
+	DWT_Init();
+	fft_init();
 
-    uint32_t start = __HAL_TIM_GET_COUNTER(&htim2);
-    fft_bench(NUM_ITER);
-    uint32_t end   = __HAL_TIM_GET_COUNTER(&htim2);
+	uint32_t start = DWT->CYCCNT;
+	fft_bench(NUM_ITER);
+	uint32_t end   = DWT->CYCCNT;
 
-    uint32_t ticks = end - start;       // ticks @108 MHz
-    // Converti a cicli CPU (216 MHz): *2
-    total_cycles = ticks * 2u;
-    avg_cycles   = total_cycles / NUM_ITER;
+	total_cycles = end - start;
+	avg_cycles   = total_cycles / NUM_ITER;
 
-    printf("HAL_RCC_GetSysClockFreq() = %lu Hz\r\n",
+	/*printf("HAL_RCC_GetSysClockFreq() = %lu Hz\r\n",
            (unsigned long)HAL_RCC_GetSysClockFreq());
     printf("HAL_RCC_GetPCLK1Freq()    = %lu Hz\r\n",
-           (unsigned long)HAL_RCC_GetPCLK1Freq());
-    printf("TIM2 ticks=%lu\r\n", (unsigned long)ticks);
-    printf("total_cycles=%lu avg_cycles=%lu\r\n",
-           (unsigned long)total_cycles,
-           (unsigned long)avg_cycles);
+           (unsigned long)HAL_RCC_GetPCLK1Freq());*
+    printf("TIM2 ticks=%lu\r\n", (unsigned long)ticks);*/
+
 }
 
 /* USER CODE END 0 */
@@ -216,21 +217,22 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART3_UART_Init();
-  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-	// Inizializza DWT per il conteggio dei cicli
-	//SysTick->CTRL = 0;   // disabilita SysTick
-	//__disable_irq();     // opzionale se vuoi togliere tutte le IRQ
+  //SysTick->CTRL = 0;   // disabilita SysTick
+  //__disable_irq();     // opzionale se vuoi togliere tutte le IRQ
+
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  printf("Bare metal F7\r\n");
-      run_benchmark();
 
+	run_benchmark();
+	printf("Bare metal\r\n");
+	printf("Total cycles: %lu\r\n", (unsigned long)total_cycles);
+	printf("Avg cycles per FFT: %lu\r\n", (unsigned long)avg_cycles);
 
 	while (1)
 	{
@@ -293,51 +295,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-  HAL_TIM_Base_Start(&htim2);
-  /* USER CODE END TIM2_Init 2 */
-
 }
 
 /**

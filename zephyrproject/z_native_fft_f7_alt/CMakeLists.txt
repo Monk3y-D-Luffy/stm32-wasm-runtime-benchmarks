@@ -5,4 +5,3 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(z_native_fft)
 
 target_sources(app PRIVATE src/main.c)
-#zephyr_compile_options(-O3)

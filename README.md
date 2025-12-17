@@ -200,9 +200,9 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 
 | Ambiente     | Runtime / Modalità       | Cicli medi per FFT | Slowdown vs C bare-metal |
 |--------------|--------------------------|-------------------:|-------------------------:|
-| Bare-metal   | C nativo                 | **124 142**        | **1.00×**                |
+| Bare-metal   | C nativo                 | **124 108**        | **1.00×**                |
 | FreeRTOS     | C nativo                 | **124 562**        | **1.00×**                |
-| Zephyr       | C nativo                 | **167 446**        | **1.35×**                |
+| Zephyr       | C nativo                 | **171 412**         | **1.38×**                |
 | Bare-metal   | wasm3 (interprete)       | **15 932 553**     | **128.4×**               |
 | FreeRTOS     | wasm3 (interprete)       | **13 962 748**     | **112.5×**               |
 | Zephyr       | wasm3 (interprete)       | **14 270 967**     | **115.0×**               |
@@ -212,7 +212,7 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 
 **Note FFT F746ZG:**
 - C nativo Bare-metal/FreeRTOS ~1.8× più veloce dell'F4 (124k vs 219k cicli).
-- Zephyr C nativo ha ~35% overhead vs bare-metal.
+- Zephyr C nativo ha ~38% overhead vs bare-metal.
 - Tra gli interpreti Wasm, WAMR è il più veloce su F7 (~8.8M cicli, ~70× slowdown), seguito da wasm3 (~14–16M cicli).
 - WAMR AOT riduce ulteriormente il gap, a ~20× slowdown rispetto al C nativo.
 
