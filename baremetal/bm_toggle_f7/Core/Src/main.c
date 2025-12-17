@@ -113,6 +113,7 @@ int main(void)
 	  s ^= 1u;
 	  if (s) GPIOA->BSRR = (1u << 5);        // set PA5
 	  else   GPIOA->BSRR = (1u << (5 + 16)); // reset PA5
+	  for (volatile int i=0; i<60000000; i++);
   }
   /* USER CODE END 3 */
 }

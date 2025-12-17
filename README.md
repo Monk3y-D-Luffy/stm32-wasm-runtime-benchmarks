@@ -123,7 +123,7 @@ xxd -i fft_bench.aot > fft_bench_aot.h
 
 <br>
 
-## Risultati sperimentali – Toggle Benchmark (PA5, ~180 MHz core)
+## Risultati sperimentali – Toggle Benchmark (F446RE, ~180 MHz core)
 
 | Stack            | Runtime / Modalità | Frequenza misurata | Slowdown vs C bare-metal |
 |------------------|--------------------|--------------------|--------------------------|
@@ -152,25 +152,27 @@ xxd -i fft_bench.aot > fft_bench_aot.h
 
 ## Risultati sperimentali – Toggle Benchmark (F746ZG, ~216 MHz core)
 
-| Stack            | Frequenza misurata | con cache     | Slowdown vs C nativo |
-|------------------|--------------------|---------------|----------------------|
-| Bare-metal       | **~110 MHz**       | **110 MHz**   | **1.00x**            |
-| FreeRTOS         | **~110 MHz**       | **110 MHz**   | **1.00x**            |
-| Zephyr           | **~108 MHz**       | **108 MHz**   | **1.02x**            |
-| Bare-metal       | **~246 kHz**       | **908 kHz**   | **121.1x**           |
-| FreeRTOS         | **~264 kHz**       | **907 kHz**   | **121.3x**           |
-| Zephyr           | **310 kHz**        | **1.07 MHz**  | **102.8x**           |
-| Zephyr           | **~104 kHz**       | **334 kHz**   | **329.3x**           |
-| Zephyr           | **~162 kHz**       | **467 kHz**   | **235.6x**           |
+
+| Stack            | Runtime / Modalità | Frequenza misurata | Slowdown vs C nativo |
+|------------------|--------------------|--------------------|----------------------|
+| Bare-metal       | C nativo           | **~110 MHz**       | **1.00×**            |
+| FreeRTOS         | C nativo           | **~110 MHz**       | **1.00×**            |
+| Zephyr           | C nativo           | **~108 MHz**       | **1.02×**            |
+| Bare-metal       | wasm3 (interprete) | **~908 kHz**       | **121.1×**           |
+| FreeRTOS         | wasm3 (interprete) | **~907 kHz**       | **121.3×**           |
+| Zephyr           | wasm3 (interprete) | **~1.07 MHz**      | **102.8×**           |
+| Zephyr           | WAMR (interprete)  | **~334 kHz**       | **329.3×**           |
+| Zephyr           | WAMR (AOT)         | **~467 kHz**       | **235.6×**           |
 
 **Note Toggle F746ZG:**
-- Cortex-M7 con cache abilitate (I-cache, D-cache, prefetch) mostra toggle nativo ~3× più veloce (110 MHz vs 36 MHz).
-- Wasm3 beneficia enormemente delle cache (~4× speedup).
-- WAMR AOT con cache ~2.9× speedup vs senza.
+- Cortex-M7 nativo ~3× più veloce dell'F4 (110 MHz vs 36 MHz).
+- Overhead kernel (FreeRTOS/Zephyr) trascurabile sul loop tight.
+- Wasm3 F7 ~1.8× più veloce di F4 (908 kHz vs 502 kHz).
+- WAMR AOT resta più lento di Wasm3 (~2.3× slowdown relativo).
 
 <br>
 
-## FFT Benchmark (N = 1024, 100 iterazioni)
+## FFT Benchmark (F446RE, N = 1024, 100 iterazioni)
 Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali di 100 esecuzioni consecutive dell’algoritmo e dividendo per il numero di iterazioni.
 
 | Ambiente     | Runtime / Modalità       | Cicli medi per FFT | Slowdown vs C bare-metal |
@@ -184,10 +186,35 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 | Zephyr       | WAMR (interprete)        | **13 567 746**     | **61.95×**               |
 | Zephyr       | WAMR (AOT)               | **3 341 702**      | **15.26×**               |                 
 
-**Note FFT:**
+**Note FFT F446RE:**
 - Interpreti wasm 60–80× slowdown.
 - WAMR AOT riduce a ~15×.
 - FreeRTOS/Zephyr overhead nullo.
+
+<br>
+
+
+## FFT Benchmark (F746ZG, N = 1024, 100 iterazioni)
+
+Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali di 100 esecuzioni consecutive dell’algoritmo e dividendo per il numero di iterazioni.
+
+| Ambiente     | Runtime / Modalità       | Cicli medi per FFT | Slowdown vs C bare-metal |
+|--------------|--------------------------|-------------------:|-------------------------:|
+| Bare-metal   | C nativo                 | **124 142**        | **1.00×**                |
+| FreeRTOS     | C nativo                 | **124 562**        | **1.00×**                |
+| Zephyr       | C nativo                 | **167 446**        | **1.35×**                |
+| Bare-metal   | wasm3 (interprete)       | **15 932 553**     | **128.4×**               |
+| FreeRTOS     | wasm3 (interprete)       | **13 962 748**     | **112.5×**               |
+| Zephyr       | wasm3 (interprete)       | **14 270 967**     | **115.0×**               |
+| Zephyr       | WAMR (interprete)        | **8 759 838**      | **70.5×**                |
+| Zephyr       | WAMR (AOT)               | **2 542 771**      | **20.5×**                |
+
+
+**Note FFT F746ZG:**
+- C nativo Bare-metal/FreeRTOS ~1.8× più veloce dell'F4 (124k vs 219k cicli).
+- Zephyr C nativo ha ~35% overhead vs bare-metal.
+- Tra gli interpreti Wasm, **WAMR** è il più veloce su F7 (~8.8M cicli, ~70× slowdown), seguito da wasm3 (~14–16M cicli).
+- WAMR AOT riduce ulteriormente il gap, a ~20× slowdown rispetto al C nativo.
 
 <br>
 
