@@ -1,4 +1,4 @@
-﻿# STM32 WASM Runtime Benchmarks
+# STM32 WASM Runtime Benchmarks
 
 Questo repository contiene una serie di esperimenti per confrontare le prestazioni di diversi stack di esecuzione su **STM32F446RE (180 MHz)** e **STM32F746ZG (216 MHz)**, misurando:
 1. La frequenza massima di commutazione GPIO (toggle) tramite oscilloscopio.
@@ -202,7 +202,7 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 |--------------|--------------------------|-------------------:|-------------------------:|
 | Bare-metal   | C nativo                 | **124 108**        | **1.00×**                |
 | FreeRTOS     | C nativo                 | **124 562**        | **1.00×**                |
-| Zephyr       | C nativo                 | **171 412**         | **1.38×**                |
+| Zephyr       | C nativo                 | **171 412**        | **1.38×**                |
 | Bare-metal   | wasm3 (interprete)       | **15 932 553**     | **128.4×**               |
 | FreeRTOS     | wasm3 (interprete)       | **13 962 748**     | **112.5×**               |
 | Zephyr       | wasm3 (interprete)       | **14 270 967**     | **115.0×**               |
@@ -215,6 +215,31 @@ Metrica: cicli medi per una FFT a 1024 punti, ottenuti contando i cicli totali d
 - Zephyr C nativo ha ~38% overhead vs bare-metal.
 - Tra gli interpreti Wasm, WAMR è il più veloce su F7 (~8.8M cicli, ~70× slowdown), seguito da wasm3 (~14–16M cicli).
 - WAMR AOT riduce ulteriormente il gap, a ~20× slowdown rispetto al C nativo.
+
+<br>
+
+## FFT Benchmark – Linux (WSL2, N = 1024, 100 iterazioni)
+
+Metrica: cicli medi equivalenti per una FFT a 1024 punti, calcolati da misure in
+nanosecondi su Ubuntu in WSL2, con CPU Intel Core i5-9600K fissata a 3,7 GHz (Turbo Boost disabilitato).
+
+| Ambiente     | Runtime / Modalità   | Cicli medi per FFT  | Slowdown vs C nativo  |
+|--------------|----------------------|--------------------:|----------------------:|
+| Linux (WSL2) | C nativo             | 28 875              | 1.0×                  |
+| Linux (WSL2) | wasm3 (interprete)   | 784 509             | 27.2×                 |
+| Linux (WSL2) | WAMR (interprete)    | 1 448 892           | 50.2×                 |
+| Linux (WSL2) | WAMR (AOT)           | 50 577              | 1.75×                 |
+
+**Note FFT Linux (WSL2):**
+- C nativo resta la baseline più veloce con ~28.9k cicli per FFT.
+- wwasm3 introduce uno slowdown di ~27× rispetto al C nativo, mentre WAMR interprete sale a ~50×.
+- WAMR AOT si mantiene molto vicino alla baseline con ~1.75× i cicli del C nativo, confermando il vantaggio di AOT rispetto agli interpreti sullo stesso host.
+
+<br>
+
+## FFT Benchmark – Android (N = 1024, 100 iterazioni)
+
+_I risultati per Android (C nativo, wasm3, WAMR interprete e WAMR AOT) verranno aggiunti dopo l’esecuzione dei benchmark sulla piattaforma target._
 
 <br>
 
