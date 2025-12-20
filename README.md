@@ -1,8 +1,8 @@
 # STM32 WASM Runtime Benchmarks
 
-Questo repository contiene una serie di esperimenti per confrontare le prestazioni di diversi stack di esecuzione su **STM32F446RE (180 MHz)** e **STM32F746ZG (216 MHz)**, misurando:
-1. La frequenza massima di commutazione GPIO (toggle) tramite oscilloscopio.
-2. Le prestazioni su un algoritmo numerico reale (FFT radix-2 complessa).
+Questo repository contiene una serie di esperimenti per confrontare le prestazioni di diversi stack di esecuzione su **STM32F446RE (180 MHz)** e **STM32F746ZG (216 MHz)**, e su piattaforme host (Linux/Android), misurando:
+1. La frequenza massima di commutazione GPIO (toggle) tramite oscilloscopio (solo MCU).
+2. Le prestazioni su un algoritmo numerico reale (FFT radix-2 complessa) sia su MCU che su host (Linux, Android).
 
 L'obiettivo è quantificare l'overhead introdotto da:
 
@@ -14,6 +14,8 @@ L'obiettivo è quantificare l'overhead introdotto da:
 - Zephyr + WebAssembly (Wasm3)  
 - Zephyr + WAMR (Interprete)  
 - Zephyr + WAMR (AOT)
+- Host Linux (WSL2) + C nativo / wasm3 / WAMR (interprete + AOT)
+- Host Android + C nativo / wasm3 / WAMR (interprete + AOT, in preparazione)
 
 Il repository fornisce:
 - codice sorgente completo per tutti gli stack testati
@@ -32,6 +34,12 @@ Il repository fornisce:
 | **Nucleo-F446RE** | STM32F446RET6 (Cortex-M4F) | **180 MHz** | Rigol MSO5104 | ×10 | punta → PA5, GND → GND |
 | **Nucleo-F746ZG** | STM32F746ZGT6 (Cortex-M7) | **216 MHz** | Rigol MSO5104 | ×10 | punta → PA5, GND → GND |
 
+Per i test host:
+
+    Linux (WSL2): Ubuntu su WSL2, CPU Intel Core i5‑9600K fissata a 3,7 GHz (Turbo Boost disabilitato).
+
+    Android: dispositivo ARMv8‑A (dettagli hardware e versione Android saranno documentati insieme ai risultati FFT).
+
 <br>
 
 ## Obiettivo del benchmark
@@ -41,12 +49,13 @@ Il repository fornisce:
 
 2. **FFT benchmark**  
    Misurare le prestazioni di una FFT complessa radix-2 in-place (N=1024):  
-   - implementata in C portabile puro (nessuna intrinsics ARM)  
+   - implementata in C portabile puro
    - identica per i test nativi e per i runtime Wasm  
    - compilata:  
      - ARM nativo tramite GCC (STM32CubeIDE)  
      - Wasm interprete tramite clang → wasm32  
-     - WAMR AOT tramite wamrc --target=thumbv7em  
+     - WAMR AOT tramite wamrc --target=thumbv7em
+     - Host Linux/Android tramite toolchain nativa + clang → wasm32 + WAMR AOT (x86‑64/ARMv8)  
 
 La FFT comprende bit-reversal, 10 stadi, twiddle factors precomputati e tutto il flusso Cooley–Tukey DIT.
 
@@ -91,7 +100,7 @@ La FFT utilizzata è:
 - N = 1024
 - 10 stadi completi
 - twiddle precomputati (nessuna dipendenza da math.h)
-- identica per ARM nativo, Wasm3, WAMR (interprete + AOT)
+- identica per ARM nativo, Wasm3, WAMR (interprete + AOT), host Linux/Android.
 
 Il modulo Wasm espone:
 ```c
@@ -114,9 +123,19 @@ clang --target=wasm32-unknown-unknown \
 xxd -i fft_bench.wasm > fft_bench.wasm.h
 ```
 
-AOT:
+AOT per MCU (ARM Thumb-2):
 ```bash
 wamrc --target=thumbv7em --target-abi=eabi -o fft_bench.aot fft_bench.wasm
+
+xxd -i fft_bench.aot > fft_bench_aot.h
+```
+
+AOT per x86_64 Linux:
+```bash
+wamrc --target=x86_64 \
+  --opt-level=3 --size-level=0 \
+  --bounds-checks=0 --stack-bounds-checks=0 \
+  -o fft_bench.aot fft_bench.wasm
 
 xxd -i fft_bench.aot > fft_bench_aot.h
 ```
@@ -233,7 +252,7 @@ nanosecondi su Ubuntu in WSL2, con CPU Intel Core i5-9600K fissata a 3,7 GHz (Tu
 **Note FFT Linux (WSL2):**
 - C nativo resta la baseline più veloce con ~28.9k cicli per FFT.
 - wwasm3 introduce uno slowdown di ~27× rispetto al C nativo, mentre WAMR interprete sale a ~50×.
-- WAMR AOT si mantiene molto vicino alla baseline con ~1.75× i cicli del C nativo, confermando il vantaggio di AOT rispetto agli interpreti sullo stesso host.
+- WAMR AOT resta molto vicino al nativo (~1.75×), in linea con il fatto che AOT su host tende a fornire prestazioni quasi native.
 
 <br>
 
@@ -253,7 +272,7 @@ _I risultati per Android (C nativo, wasm3, WAMR interprete e WAMR AOT) verranno 
   - xxd
   - Wasm3
   - WAMR(Interpreter + AOT)
-  - wamrc (AOT → ARM Thumb2)
+  - wamrc (AOT → ARM Thumb2 / x86‑64 / ARMv8 a seconda del target)
 
 <br>
 
