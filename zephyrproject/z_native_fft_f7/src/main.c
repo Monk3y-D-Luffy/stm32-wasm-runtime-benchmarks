@@ -1,16 +1,11 @@
 #include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/init.h>
 #include <stm32f7xx.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/sys_clock.h>
+#include "twiddle1024.h"
 
 #define N_FFT     1024
 #define NUM_ITER  100
 
 static float buf[2 * N_FFT];
-
-#include "twiddle1024.h"
 
 volatile uint32_t total_cycles = 0;
 volatile uint32_t avg_cycles   = 0;
@@ -96,14 +91,26 @@ void fft_bench(int iterations)
     }
 }
 
+static void DWT_Init(void)
+{
+    // Sblocca il DWT (richiesto su Cortex-M7 / F7)
+    DWT->LAR = 0xC5ACCE55;                    // magic unlock key [web:315271]
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;  // abilita blocco trace
+    DWT->CYCCNT = 0;
+    DWT->CTRL   |= DWT_CTRL_CYCCNTENA_Msk;           // abilita CYCCNT
+}
 
 void run_benchmark(void)
 {
+    DWT_Init();
     fft_init();
 
-    uint32_t start = k_cycle_get_32();
+    uint32_t start = DWT->CYCCNT;
+    
     fft_bench(NUM_ITER);
-    uint32_t end   = k_cycle_get_32();
+    uint32_t end = DWT->CYCCNT;
+    
 
     total_cycles = end - start;
     avg_cycles   = total_cycles / NUM_ITER;
@@ -111,26 +118,21 @@ void run_benchmark(void)
 
 void main(void)
 {
-   //SysTick->CTRL = 0;   // disabilita SysTick
-	//__disable_irq();     // opzionale se vuoi togliere tutte le IRQ
-
-	/* USER CODE END 2 */
-
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
     enable_caches();
     enable_prefetch();
-	run_benchmark();
 
-	printk("Total cycles: %lu\n", (unsigned long)total_cycles);
-    printk("Avg cycles per FFT: %lu\n", (unsigned long)avg_cycles);
+    //SysTick->CTRL = 0;   // disabilita SysTick
+	//__disable_irq();     // opzionale se vuoi togliere tutte le IRQ
+
+    run_benchmark();
+
+    printk("Zephyr\r\n");
+	printk("Total cycles: %lu\r\n", (unsigned long)total_cycles);
+	printk("Avg cycles per FFT: %lu\r\n", (unsigned long)avg_cycles);
 //printk("SystemCoreClock = %u Hz\n", SystemCoreClock);
 
-	while (1)
-	{
-		/* USER CODE END WHILE */
+    while (1) {
+        __NOP();
+    }
 
-		/* USER CODE BEGIN 3 */
-		__NOP(); // metti un breakpoint e guarda total_cycles / avg_cycles
-	}
 }

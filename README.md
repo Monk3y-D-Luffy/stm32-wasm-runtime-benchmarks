@@ -36,9 +36,9 @@ Il repository fornisce:
 
 Per i test host:
 
-    Linux (WSL2): Ubuntu su WSL2, CPU Intel Core i5‑9600K fissata a 3,7 GHz (Turbo Boost disabilitato).
+- Linux (WSL2): Ubuntu su WSL2, CPU Intel Core i5‑9600K fissata a 3,7 GHz (Turbo Boost disabilitato).
 
-    Android: dispositivo ARMv8‑A (dettagli hardware e versione Android saranno documentati insieme ai risultati FFT).
+- Android: dispositivo ARMv8‑A (dettagli hardware e versione Android saranno documentati insieme ai risultati FFT).
 
 <br>
 
