@@ -6,9 +6,7 @@
 /zephyrproject/tools/
 /zephyrproject/zephyr/
 /zephyrproject/extra/
-/zephyrproject/z_wasm3_gpio_f7/
-/zephyrproject/z_wasm3_uart_f7/
 **/Debug/
 **/Release/
 **/build/
-**/agent/
+
