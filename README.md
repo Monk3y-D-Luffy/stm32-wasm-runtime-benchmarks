@@ -75,7 +75,6 @@ In ambito embedded, Flash e RAM rappresentano vincoli critici. Di seguito viene 
 
 **Nota**: il simbolo `*` indica configurazioni in cui parte della memoria “dinamica” risulta contabilizzata come statica (es. pool statico WAMR o heap di sistema Zephyr conteggiato staticamente).
 
----
 
 ### Toggle – Footprint memoria (F446RE)
 
@@ -88,7 +87,6 @@ In ambito embedded, Flash e RAM rappresentano vincoli critici. Di seguito viene 
 <small>¹ Stima: Heap Wasm (8 KiB) + Stack Thread (4 KiB).</small>  
 <small>* Include buffer statico pre-allocato (es. pool) contabilizzato nella RAM statica.</small>
 
----
 
 ### Toggle – Footprint memoria (F746ZG)
 
@@ -101,7 +99,7 @@ In ambito embedded, Flash e RAM rappresentano vincoli critici. Di seguito viene 
 <small>¹ Stima: Heap Wasm (8 KiB) + Stack Thread (4 KiB).</small>  
 <small>* Include buffer statico pre-allocato (es. pool) contabilizzato nella RAM statica.</small>
 
----
+
 
 ### FFT – Footprint memoria (F446RE, N=1024)
 
@@ -115,7 +113,6 @@ In questa configurazione, WAMR utilizza l'allocatore di sistema (`malloc`) invec
 
 <small>* Wasm3: l'heap dinamico risulta conteggiato nella RAM statica da Zephyr (es. `CONFIG_HEAP_MEM_POOL_SIZE`).</small>
 
----
 
 ### FFT – Footprint memoria (F746ZG, N=1024)
 
