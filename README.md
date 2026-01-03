@@ -64,57 +64,69 @@ La FFT comprende bit-reversal, 10 stadi, twiddle factors precomputati e tutto il
 
 ## Utilizzo di memoria (Flash/RAM)
 
-Oltre alle prestazioni, viene misurato anche il **footprint di memoria** dei runtime WebAssembly su MCU, perché in ambito embedded Flash e RAM sono spesso vincoli primari. 
+In ambito embedded, Flash e RAM rappresentano vincoli critici. Di seguito viene analizzato il footprint di memoria dei runtime su Zephyr, distinguendo tra occupazione statica (compile-time) e dinamica (run-time).
 
-### Metodologia (Zephyr)
+### Metodologia
 
-Le metriche riportate sono:
-- **Flash (ROM)**: dimensione della sezione codice + dati inizializzati (tipicamente `text + rodata + data`). 
-- **RAM Statica**: dati globali inizializzati + non inizializzati (tipicamente `data + bss`). 
-- **RAM Dinamica**: heap/stack runtime allocati a runtime; quando presente viene riportata separatamente.
-- **RAM Totale**: somma delle componenti considerate (oppure “stimata” se non separabile).
+- **Flash (ROM)**: dimensione totale dell'immagine firmware (`text + rodata + data`), includendo kernel RTOS, runtime Wasm e applicazione.
+- **RAM Statica**: dati globali e buffer allocati staticamente (`data + bss`).
+- **RAM Dinamica**: heap e stack richiesti a runtime.
+- **RAM Totale**: somma effettiva delle risorse impegnate.
 
-> Nota: `*` indica casi in cui la metrica è influenzata da pre-allocazioni del runtime o dal setup del benchmark.
+**Nota**: il simbolo `*` indica configurazioni in cui parte della memoria “dinamica” risulta contabilizzata come statica (es. pool statico WAMR o heap di sistema Zephyr conteggiato staticamente).
 
-<br>
+---
 
-### Toggle – footprint memoria (F446RE)
-
-| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
-|---|---:|---:|---:|---:|
-| Zephyr + Wasm3 | 77,80 KiB | 4,69 KiB | — | ~16,69 KiB |
-| Zephyr + WAMR (Interp) | 85,16 KiB | 77,81 KiB | — | ~77,81 KiB * |
-| Zephyr + WAMR (AOT) | 78,52 KiB | 80,31 KiB | — | ~80,31 KiB * |
-
-<br>
-
-### Toggle – footprint memoria (F746ZG)
+### Toggle – Footprint memoria (F446RE)
 
 | Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
 |---|---:|---:|---:|---:|
-| Zephyr + Wasm3 | 78,36 KiB | 4,75 KiB | — | ~16,75 KiB |
-| Zephyr + WAMR (Interp) | 85,64 KiB | 77,87 KiB | — | ~77,87 KiB * |
-| Zephyr + WAMR (AOT) | 78,98 KiB | 80,37 KiB | — | ~80,37 KiB * |
+| Zephyr + Wasm3 | 77,80 KiB | 4,69 KiB | ~12,00 KiB¹ | ~16,69 KiB |
+| Zephyr + WAMR (Interp) | 85,16 KiB | 77,81 KiB * | Inclusa * | ~77,81 KiB |
+| Zephyr + WAMR (AOT) | 78,52 KiB | 80,31 KiB * | Inclusa * | ~80,31 KiB |
 
-<br>
+<small>¹ Stima: Heap Wasm (8 KiB) + Stack Thread (4 KiB).</small>  
+<small>* Include buffer statico pre-allocato (es. pool) contabilizzato nella RAM statica.</small>
 
-### FFT – footprint memoria (F446RE, N=1024)
+---
+
+### Toggle – Footprint memoria (F746ZG)
 
 | Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
 |---|---:|---:|---:|---:|
-| Zephyr + Wasm3 | 98,19 KiB | 37,13 KiB * | Inclusa | ~37,13 KiB |
+| Zephyr + Wasm3 | 78,36 KiB | 4,75 KiB | ~12,00 KiB¹ | ~16,75 KiB |
+| Zephyr + WAMR (Interp) | 85,64 KiB | 77,87 KiB * | Inclusa * | ~77,87 KiB |
+| Zephyr + WAMR (AOT) | 78,98 KiB | 80,37 KiB * | Inclusa * | ~80,37 KiB |
+
+<small>¹ Stima: Heap Wasm (8 KiB) + Stack Thread (4 KiB).</small>  
+<small>* Include buffer statico pre-allocato (es. pool) contabilizzato nella RAM statica.</small>
+
+---
+
+### FFT – Footprint memoria (F446RE, N=1024)
+
+In questa configurazione, WAMR utilizza l'allocatore di sistema (`malloc`) invece del buffer statico.
+
+| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
+|---|---:|---:|---:|---:|
+| Zephyr + Wasm3 | 98,19 KiB | 37,13 KiB * | Inclusa * | ~37,13 KiB |
 | Zephyr + WAMR (Interp) | 106,02 KiB | 19,38 KiB | 16,00 KiB | ~35,38 KiB |
 | Zephyr + WAMR (AOT) | 99,50 KiB | 22,13 KiB | 16,00 KiB | ~38,13 KiB |
 
-<br>
+<small>* Wasm3: l'heap dinamico risulta conteggiato nella RAM statica da Zephyr (es. `CONFIG_HEAP_MEM_POOL_SIZE`).</small>
 
-### FFT – footprint memoria (F746ZG, N=1024)
+---
+
+### FFT – Footprint memoria (F746ZG, N=1024)
 
 | Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
 |---|---:|---:|---:|---:|
-| Zephyr + Wasm3 | 98,68 KiB | 37,25 KiB * | Inclusa | ~37,25 KiB |
+| Zephyr + Wasm3 | 98,68 KiB | 37,25 KiB * | Inclusa * | ~37,25 KiB |
 | Zephyr + WAMR (Interp) | 106,81 KiB | 19,37 KiB | 16,00 KiB | ~35,37 KiB |
 | Zephyr + WAMR (AOT) | 99,99 KiB | 22,25 KiB | 16,00 KiB | ~38,25 KiB |
+
+<small>* Wasm3: l'heap dinamico risulta conteggiato nella RAM statica da Zephyr (es. `CONFIG_HEAP_MEM_POOL_SIZE`).</small>
+
 
 
 <br>
