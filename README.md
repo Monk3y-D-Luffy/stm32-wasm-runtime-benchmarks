@@ -61,6 +61,64 @@ La FFT comprende bit-reversal, 10 stadi, twiddle factors precomputati e tutto il
 
 <br>
 
+
+## Utilizzo di memoria (Flash/RAM)
+
+Oltre alle prestazioni, viene misurato anche il **footprint di memoria** dei runtime WebAssembly su MCU, perché in ambito embedded Flash e RAM sono spesso vincoli primari. 
+
+### Metodologia (Zephyr)
+
+Le metriche riportate sono:
+- **Flash (ROM)**: dimensione della sezione codice + dati inizializzati (tipicamente `text + rodata + data`). 
+- **RAM Statica**: dati globali inizializzati + non inizializzati (tipicamente `data + bss`). 
+- **RAM Dinamica**: heap/stack runtime allocati a runtime; quando presente viene riportata separatamente.
+- **RAM Totale**: somma delle componenti considerate (oppure “stimata” se non separabile).
+
+> Nota: `*` indica casi in cui la metrica è influenzata da pre-allocazioni del runtime o dal setup del benchmark.
+
+<br>
+
+### Toggle – footprint memoria (F446RE)
+
+| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
+|---|---:|---:|---:|---:|
+| Zephyr + Wasm3 | 77,80 KiB | 4,69 KiB | — | ~16,69 KiB |
+| Zephyr + WAMR (Interp) | 85,16 KiB | 77,81 KiB | — | ~77,81 KiB * |
+| Zephyr + WAMR (AOT) | 78,52 KiB | 80,31 KiB | — | ~80,31 KiB * |
+
+<br>
+
+### Toggle – footprint memoria (F746ZG)
+
+| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
+|---|---:|---:|---:|---:|
+| Zephyr + Wasm3 | 78,36 KiB | 4,75 KiB | — | ~16,75 KiB |
+| Zephyr + WAMR (Interp) | 85,64 KiB | 77,87 KiB | — | ~77,87 KiB * |
+| Zephyr + WAMR (AOT) | 78,98 KiB | 80,37 KiB | — | ~80,37 KiB * |
+
+<br>
+
+### FFT – footprint memoria (F446RE, N=1024)
+
+| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
+|---|---:|---:|---:|---:|
+| Zephyr + Wasm3 | 98,19 KiB | 37,13 KiB * | Inclusa | ~37,13 KiB |
+| Zephyr + WAMR (Interp) | 106,02 KiB | 19,38 KiB | 16,00 KiB | ~35,38 KiB |
+| Zephyr + WAMR (AOT) | 99,50 KiB | 22,13 KiB | 16,00 KiB | ~38,13 KiB |
+
+<br>
+
+### FFT – footprint memoria (F746ZG, N=1024)
+
+| Configurazione | Flash (ROM) | RAM Statica | RAM Dinamica | RAM Totale |
+|---|---:|---:|---:|---:|
+| Zephyr + Wasm3 | 98,68 KiB | 37,25 KiB * | Inclusa | ~37,25 KiB |
+| Zephyr + WAMR (Interp) | 106,81 KiB | 19,37 KiB | 16,00 KiB | ~35,37 KiB |
+| Zephyr + WAMR (AOT) | 99,99 KiB | 22,25 KiB | 16,00 KiB | ~38,25 KiB |
+
+
+<br>
+
 ## Codice WebAssembly utilizzato
 
 ### WAT minimale (toggle)
