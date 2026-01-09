@@ -227,7 +227,7 @@ xxd -i fft_bench.aot > fft_bench_aot.h
 
 ## Experimental results – Toggle Benchmark (F746ZG, ~216 MHz core)
 
-| Stack | Runtime / Mode | Measured frequency | Slowdown vs native C |
+| Stack | Runtime / Mode | Measured frequency | Slowdown vs bare-metal C |
 |------------------|--------------------|--------------------|----------------------|
 | Bare-metal | Native C | **~110 MHz** | **1.00×** |
 | FreeRTOS | Native C | **~110 MHz** | **1.00×** |
