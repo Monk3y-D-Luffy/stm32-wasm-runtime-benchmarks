@@ -297,10 +297,10 @@ Metric: equivalent average cycles per 1024-point FFT, computed from nanosecond m
 
 | Environment | Runtime / Mode | Average cycles per FFT | Slowdown vs native C |
 |--------------|----------------------|--------------------:|----------------------:|
-| Linux (WSL2) | Native C | 28 875 | 1.0× |
-| Linux (WSL2) | wasm3 (interpreter) | 784 509 | 27.2× |
-| Linux (WSL2) | WAMR (interpreter) | 1 448 892 | 50.2× |
-| Linux (WSL2) | WAMR (AOT) | 50 577 | 1.75× |
+| Linux (WSL2) | Native C | **28 875** | **1.0×** |
+| Linux (WSL2) | wasm3 (interpreter) | **784 509** | **27.2×** |
+| Linux (WSL2) | WAMR (interpreter) | **1 448 892** | **50.2×** |
+| Linux (WSL2) | WAMR (AOT) | **50 577** | **1.75×** |
 
 **FFT Linux (WSL2) notes:**
 - Native C remains the fastest baseline at ~28.9k cycles per FFT.
