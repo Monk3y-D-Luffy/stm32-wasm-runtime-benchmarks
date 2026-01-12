@@ -41,6 +41,12 @@ static uint8_t g_wamr_pool[WAMR_GLOBAL_POOL_SIZE] __attribute__((aligned(8)));
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 #define LED0_NODE        DT_ALIAS(led0)
 
+#define LOAD_GUARD_BYTES   (8 * 1024)
+#define START_GUARD_BYTES  (16 * 1024)
+
+#define START_GUARD_BYTES_NEED_EXEC_ENV   (16 * 1024)
+#define START_GUARD_BYTES_HAVE_EXEC_ENV   (4 * 1024)
+
 /* ------------------------ UART MsgQ ------------------------ */
 
 K_MSGQ_DEFINE(uart_msgq, LINE_BUF_SIZE, 4, 4);
@@ -64,13 +70,15 @@ typedef struct {
     wasm_module_t module;
     wasm_module_inst_t inst;
 
+    wasm_exec_env_t exec_env;   // << nuovo: exec_env persistente
+
     volatile bool stop_requested;
     volatile bool busy;
     mod_state_t state;
 
     struct k_thread thread;
     k_tid_t tid;
-    struct k_sem work_sem;   /* init runtime con k_sem_init(&sem,0,1) [web:322] */
+    struct k_sem work_sem;
 
     run_request_t req;
 } module_slot_t;
@@ -261,6 +269,43 @@ static module_slot_t *slot_find(const char *module_id)
     return NULL;
 }
 
+static int slot_index(module_slot_t *slot)
+{
+    return (int)(slot - g_mods);
+}
+
+static void slot_abort_worker(module_slot_t *slot)
+{
+    if (slot && slot->tid) {
+        k_thread_abort(slot->tid);
+        slot->tid = NULL;
+    }
+    /* best-effort: thread struct non più usato dopo abort */
+    memset(&slot->thread, 0, sizeof(slot->thread));
+}
+
+static void slot_ensure_worker(module_slot_t *slot)
+{
+    if (!slot || slot->tid) {
+        return;
+    }
+
+    int i = slot_index(slot);
+    k_sem_init(&slot->work_sem, 0, 1);
+
+    slot->tid = k_thread_create(
+        &slot->thread,
+        worker_stacks[i],
+        K_THREAD_STACK_SIZEOF(worker_stacks[i]),
+        module_worker,
+        slot, NULL, NULL,
+        WORKER_THREAD_PRIORITY,
+        0,
+        K_NO_WAIT
+    );
+}
+
+
 static void slot_cleanup(module_slot_t *slot)
 {
     if (!slot) return;
@@ -269,6 +314,10 @@ static void slot_cleanup(module_slot_t *slot)
     slot->busy = false;
     slot->state = MOD_EMPTY;
 
+    if (slot->exec_env) {
+        wasm_runtime_destroy_exec_env(slot->exec_env);
+        slot->exec_env = NULL;
+    }
     if (slot->inst) {
         wasm_runtime_deinstantiate(slot->inst);
         slot->inst = NULL;
@@ -293,19 +342,8 @@ static module_slot_t *slot_alloc(const char *module_id)
             slot->used = true;
             strncpy(slot->module_id, module_id, sizeof(slot->module_id) - 1);
 
-            /* work_sem è dentro struct => init runtime con k_sem_init [web:322] */
             k_sem_init(&slot->work_sem, 0, 1);
-
-            slot->tid = k_thread_create(
-                &slot->thread,
-                worker_stacks[i],
-                K_THREAD_STACK_SIZEOF(worker_stacks[i]),
-                module_worker,
-                slot, NULL, NULL,
-                WORKER_THREAD_PRIORITY,
-                0,
-                K_NO_WAIT
-            );
+            slot_ensure_worker(slot);
 
             slot->state = MOD_EMPTY;
             return slot;
@@ -313,6 +351,7 @@ static module_slot_t *slot_alloc(const char *module_id)
     }
     return NULL;
 }
+
 
 /* ------------------------ Worker thread ------------------------ */
 
@@ -363,14 +402,28 @@ static void module_worker(void *p1, void *p2, void *p3)
 
         uint32_t result_count = wasm_func_get_result_count(fn, slot->inst);
 
-        wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(slot->inst, CONFIG_APP_STACK_SIZE);
-        if (!exec_env) {
-            agent_write_str("RESULT status=NO_EXEC_ENV\n");
-            slot->busy = false;
-            slot->stop_requested = false;
-            slot->state = MOD_LOADED;
-            continue;
+        if (!slot->exec_env) {
+            /* safety: se manca l'exec_env, prova a crearlo (può fallire per OOM) */
+            slot->exec_env = wasm_runtime_create_exec_env(slot->inst, CONFIG_APP_STACK_SIZE);
+            if (!slot->exec_env) {
+                mem_alloc_info_t mi;
+                if (wasm_runtime_get_mem_alloc_info(&mi)) {
+                    char out[128];
+                    snprintf(out, sizeof(out),
+                            "RESULT status=NO_EXEC_ENV msg=\"free=%u\"\n",
+                            mi.total_free_size);
+                    agent_write_str(out);
+                } else {
+                    agent_write_str("RESULT status=NO_EXEC_ENV\n");
+                }
+
+                slot->busy = false;
+                slot->stop_requested = false;
+                slot->state = MOD_LOADED;
+                continue;
+            }
         }
+
 
         uint32 argv_local[MAX_CALL_ARGS];
         uint32 argc = req.argc;
@@ -379,7 +432,7 @@ static void module_worker(void *p1, void *p2, void *p3)
         }
 
         slot->state = MOD_RUNNING;
-        bool ok = wasm_runtime_call_wasm(exec_env, fn, argc, argv_local);
+        bool ok = wasm_runtime_call_wasm(slot->exec_env, fn, argc, argv_local);
 
         const char *exc = NULL;
         if (!ok) {
@@ -408,8 +461,6 @@ static void module_worker(void *p1, void *p2, void *p3)
 
         agent_write_str(out);
 
-        wasm_runtime_destroy_exec_env(exec_env);
-
         slot->busy = false;
         slot->stop_requested = false;
         slot->state = slot->inst ? MOD_LOADED : MOD_EMPTY;
@@ -422,25 +473,43 @@ static void module_worker(void *p1, void *p2, void *p3)
 
 static void handle_load_cmd(const char *line)
 {
-    k_mutex_lock(&load_mutex, K_FOREVER);  /* serializza LOAD */
+    k_mutex_lock(&load_mutex, K_FOREVER);
 
+    bool warn_ignored_victim = false;
     char size_str[16];
     char crc_str[16];
     char module_id_buf[32];
+    char victim_id_buf[32] = {0};
     char out_buf[200];
 
-    const char *p_mod  = find_param(line, "module_id");
-    const char *p_size = find_param(line, "size");
-    const char *p_crc  = find_param(line, "crc32");
+    bool do_replace = false;
+    bool have_victim = false;
+
+    const char *p_mod    = find_param(line, "module_id");
+    const char *p_size   = find_param(line, "size");
+    const char *p_crc    = find_param(line, "crc32");
+    const char *p_rep    = find_param(line, "replace");
+    const char *p_victim = find_param(line, "replace_victim");
 
     if (!p_mod || !p_size || !p_crc) {
         agent_write_str("LOAD_ERR code=BAD_PARAMS msg=\"missing module_id/size/crc32\"\n");
         goto out;
     }
 
-    copy_param_value(p_mod, module_id_buf, sizeof(module_id_buf));
-    copy_param_value(p_size, size_str, sizeof(size_str));
-    copy_param_value(p_crc,  crc_str,  sizeof(crc_str));
+    copy_param_value(p_mod,  module_id_buf, sizeof(module_id_buf));
+    copy_param_value(p_size, size_str,     sizeof(size_str));
+    copy_param_value(p_crc,  crc_str,      sizeof(crc_str));
+
+    if (p_rep) {
+        char rep_str[8];
+        copy_param_value(p_rep, rep_str, sizeof(rep_str));
+        do_replace = (rep_str[0] == '1'); /* semplice: 1 abilita */
+    }
+
+    if (p_victim) {
+        copy_param_value(p_victim, victim_id_buf, sizeof(victim_id_buf));
+        have_victim = (victim_id_buf[0] != '\0');
+    }
 
     uint32_t size = (uint32_t)atoi(size_str);
     if (size == 0) {
@@ -450,22 +519,66 @@ static void handle_load_cmd(const char *line)
 
     uint32_t crc_expected = (uint32_t)strtoul(crc_str, NULL, 16);
 
+    /* Admission control pool (come già fai) ... */
+
     module_slot_t *slot = slot_find(module_id_buf);
-    if (!slot) {
+
+    if (slot) {
+        if (have_victim) {
+            /* module_id esiste già -> replace in-place, quindi replace_victim non serve */
+            warn_ignored_victim = true;
+        }
+        /* Replace in-place di module_id esistente */
+        if (slot->busy) {
+            if (!do_replace) {
+                agent_write_str("LOAD_ERR code=BUSY msg=\"module running\"\n");
+                goto out;
+            }
+            /* stop forzato */
+            slot_abort_worker(slot);
+            slot->busy = false;
+            slot->stop_requested = false;
+            slot_ensure_worker(slot);
+        }
+
+        slot_cleanup(slot);
+        /* module_id già corretto */
+    } else {
+        /* module_id nuovo */
         slot = slot_alloc(module_id_buf);
-    }
-    if (!slot) {
-        agent_write_str("LOAD_ERR code=NO_SLOT msg=\"MAX_MODULES reached\"\n");
-        goto out;
-    }
 
-    if (slot->busy) {
-        agent_write_str("LOAD_ERR code=BUSY msg=\"module running\"\n");
-        goto out;
-    }
+        if (!slot) {
+            if (do_replace) {
+                if (!have_victim) {
+                    agent_write_str("LOAD_ERR code=FULL msg=\"NEED_VICTIM\"\n");
+                    goto out;
+                }
 
-    /* ricarico lo slot */
-    slot_cleanup(slot);
+                module_slot_t *victim = slot_find(victim_id_buf);
+                if (!victim) {
+                    agent_write_str("LOAD_ERR code=BAD_VICTIM msg=\"NOT_FOUND\"\n");
+                    goto out;
+                }
+
+                if (victim->busy) {
+                    slot_abort_worker(victim);
+                    victim->busy = false;
+                    victim->stop_requested = false;
+                    slot_ensure_worker(victim);
+                }
+
+                slot_cleanup(victim);
+
+                /* riuso lo slot del victim per il nuovo module_id */
+                strncpy(victim->module_id, module_id_buf, sizeof(victim->module_id) - 1);
+                victim->module_id[sizeof(victim->module_id) - 1] = '\0';
+                slot = victim;
+            } else {
+                agent_write_str("LOAD_ERR code=NO_SLOT msg=\"MAX_MODULES reached\"\n");
+                goto out;
+            }
+        }
+    }
 
     slot->wasm_buf = (uint8_t *)wasm_runtime_malloc(size);
     if (!slot->wasm_buf) {
@@ -537,8 +650,26 @@ static void handle_load_cmd(const char *line)
         goto out;
     }
 
+    /* Crea exec_env persistente per lo slot (riuso tra le chiamate) */
+    slot->exec_env = wasm_runtime_create_exec_env(slot->inst, CONFIG_APP_STACK_SIZE);
+    if (!slot->exec_env) {
+        snprintf(out_buf, sizeof(out_buf),
+                 "LOAD_ERR code=NO_EXEC_ENV msg=\"create_exec_env failed\"\n");
+        agent_write_str(out_buf);
+        slot_cleanup(slot);
+        goto out;
+    }
+
+
     slot->state = MOD_LOADED;
-    agent_write_str("LOAD_OK\n");
+    if (warn_ignored_victim) {
+        snprintf(out_buf, sizeof(out_buf),
+                "LOAD_OK warn=VICTIM_IGNORED replace_victim=%s\n",
+                victim_id_buf);
+        agent_write_str(out_buf);
+    } else {
+        agent_write_str("LOAD_OK\n");
+    }
 
 out:
     k_mutex_unlock(&load_mutex);
@@ -567,6 +698,23 @@ static void handle_start_cmd(const char *line)
         agent_write_str("RESULT status=NO_MODULE\n");
         return;
     }
+
+    /* Admission control: soglia diversa se devo creare exec_env */
+    mem_alloc_info_t mi;
+    if (wasm_runtime_get_mem_alloc_info(&mi)) {
+        uint32_t guard = slot->exec_env ? START_GUARD_BYTES_HAVE_EXEC_ENV
+                                        : START_GUARD_BYTES_NEED_EXEC_ENV;
+
+        if (mi.total_free_size < guard) {
+            char out[160];
+            snprintf(out, sizeof(out),
+                     "RESULT status=NO_MEM msg=\"free=%u need>=%u exec_env=%s\"\n",
+                     mi.total_free_size, guard, slot->exec_env ? "yes" : "no");
+            agent_write_str(out);
+            return;
+        }
+    }
+
 
     if (slot->busy) {
         agent_write_str("RESULT status=BUSY\n");
@@ -634,6 +782,7 @@ static void handle_status_cmd(const char *line)
 
     char out[512];
     char mods[256] = {0};
+    char low[128]  = {0};
 
     for (int i = 0; i < MAX_MODULES; i++) {
         module_slot_t *s = &g_mods[i];
@@ -642,39 +791,47 @@ static void handle_status_cmd(const char *line)
         const char *st = (s->state == MOD_RUNNING) ? "RUNNING" : "LOADED";
 
         char one[128];
-        uint32_t free_stack = 0;
+        size_t free_stack = 0;
         (void)k_thread_stack_space_get(s->tid, &free_stack);
 
         snprintf(one, sizeof(one),
-                 "%s:%s:wasm=%lu:stack_free=%lu",
+                 "%s:%s:wasm=%lu:stack_free=%zu",
                  s->module_id, st,
                  (unsigned long)s->wasm_size,
-                 (unsigned long)free_stack);
+                 free_stack);
 
         if (mods[0]) strncat(mods, ",", sizeof(mods) - strlen(mods) - 1);
         strncat(mods, one, sizeof(mods) - strlen(mods) - 1);
+
+        if (free_stack < 512) {
+            if (low[0]) strncat(low, ",", sizeof(low) - strlen(low) - 1);
+            strncat(low, s->module_id, sizeof(low) - strlen(low) - 1);
+        }
     }
 
     if (!mods[0]) strcpy(mods, "none");
+    if (!low[0])  strcpy(low, "none");
 
     mem_alloc_info_t mi;
     if (wasm_runtime_get_mem_alloc_info(&mi)) {
         uint32_t used = mi.total_size - mi.total_free_size;
         snprintf(out, sizeof(out),
-                "STATUS_OK modules=\"%s\" wamr_heap_total=%u wamr_heap_free=%u wamr_heap_used=%u wamr_heap_highmark=%u\n",
-                mods,
-                mi.total_size,
-                mi.total_free_size,
-                used,
-                mi.highmark_size);
+                 "STATUS_OK modules=\"%s\" low_stack=\"%s\" "
+                 "wamr_total=%u wamr_free=%u wamr_used=%u wamr_highmark=%u\n",
+                 mods, low,
+                 mi.total_size,
+                 mi.total_free_size,
+                 used,
+                 mi.highmark_size);
     } else {
         snprintf(out, sizeof(out),
-                "STATUS_OK modules=\"%s\" wamr_heap=NA\n",
-                mods);
+                 "STATUS_OK modules=\"%s\" low_stack=\"%s\" wamr_heap=NA\n",
+                 mods, low);
     }
 
     agent_write_str(out);
 }
+
 
 
 
