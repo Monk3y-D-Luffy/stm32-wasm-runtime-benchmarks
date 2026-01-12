@@ -105,61 +105,53 @@ The goal is “one request” replace, without requiring a manual `undeploy` fir
 
 ### 1) Flash firmware on the board
 
-Example (F446RE):
-```bash
-cd zephyrproject/firmware
-west build . -d build_f446 -b nucleo_f446re --pristine
-west flash --build-dir build_f446
-```
-
 Example (F746ZG):
 ```bash
 cd zephyrproject/firmware
-west build . -d build_f746 -b nucleo_f746zg --pristine
-west flash --build-dir build_f746
+west build . -b nucleo_f746zg --pristine
+west flash
 ```
 
 ### 2) Configure gateway device mapping
 Edit DEVICE_ENDPOINTS in gateway.py, e.g.:
 ```python
 DEVICE_ENDPOINTS = {
-  "nucleo_f446": "COM4",
-  "nucleo_f746": "COM7",
+  "nucleo": "COM4",
 }
 ```
 
 ### 3) Run gateway
 ```bash
-python gateway.py --port 9000
+python gateway.py
 ```
 
 ### 4) Use host CLI
 
 Status:
 ```bash
-python host.py --device nucleo_f746 status
+python host.py --device nucleo status
 ```
 
 Build + deploy a C module as AOT:
 ```bash
-python host.py --device nucleo_f746 \
-  build-and-deploy --module-id toggle1 \
-  --source wasm/c/toggle_forever.c \
+python host.py --device nucleo \
+  build-and-deploy --module-id math_ops \
+  --source wasm/c/math_ops.c \
   --mode aot
 ```
 
 Start and wait result:
 ```bash
-python host.py --device nucleo_f746 \
+python host.py --device nucleo \
   start --module-id math_ops --func-name add --func-args "a=10,b=15" --wait-result
 ```
 
 Replace victim when slots are full:
 ```bash
-python host.py --device nucleo_f746 \
-  build-and-deploy --module-id toggle3 \
+python host.py --device nucleo \
+  build-and-deploy --module-id toggle \
   --source wasm/c/toggle_forever.c --mode aot \
-  --replace-victim toggle2
+  --replace-victim math_ops
 ```
 
 ## Benchmarks
