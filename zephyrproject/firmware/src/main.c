@@ -47,6 +47,8 @@ static uint8_t g_wamr_pool[WAMR_GLOBAL_POOL_SIZE] __attribute__((aligned(8)));
 #define START_GUARD_BYTES_NEED_EXEC_ENV   (16 * 1024)
 #define START_GUARD_BYTES_HAVE_EXEC_ENV   (4 * 1024)
 
+#define STOP_FORCE_DELAY_MS 1200
+
 /* ------------------------ UART MsgQ ------------------------ */
 
 K_MSGQ_DEFINE(uart_msgq, LINE_BUF_SIZE, 4, 4);
@@ -81,6 +83,10 @@ typedef struct {
     struct k_sem work_sem;
 
     run_request_t req;
+
+    struct k_work_delayable stop_dwork;
+    struct k_work_sync stop_sync;
+    volatile bool terminate_requested;
 } module_slot_t;
 
 /* ------------------------ Globals ------------------------ */
@@ -94,8 +100,8 @@ K_THREAD_STACK_ARRAY_DEFINE(worker_stacks, MAX_MODULES, WORKER_THREAD_STACK_SIZE
 
 static const struct device *uart_dev;
 
-static const struct device *gpio_dev;
-static uint32_t gpio_pin;
+//static const struct device *gpio_dev;
+//static uint32_t gpio_pin;
 
 /* mutex per evitare interleaving output UART tra worker/comm */
 K_MUTEX_DEFINE(uart_tx_mutex);
@@ -115,6 +121,9 @@ static uint8_t *g_bin_buf      = NULL;
 static size_t   g_bin_expected = 0;
 static size_t   g_bin_received = 0;
 K_SEM_DEFINE(bin_sem, 0, 1);
+K_MUTEX_DEFINE(uart_mutex);
+/* Semaforo per serializzare accesso LED */
+K_MUTEX_DEFINE(gpio_mutex);
 
 /* ------------------------ Prototypes ------------------------ */
 
@@ -189,10 +198,11 @@ static void serial_cb(const struct device *dev, void *user_data)
 
 /* ------------------------ GPIO native ------------------------ */
 
+const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+
 static int gpio_init_for_wasm(void)
 {
-    const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
-
+    
     if (!device_is_ready(led.port)) {
         return -1;
     }
@@ -200,31 +210,60 @@ static int gpio_init_for_wasm(void)
         return -1;
     }
 
-    gpio_dev = led.port;
-    gpio_pin = led.pin;
+    //gpio_dev = led.port;
+    //gpio_pin = led.pin;
     return 0;
 }
 
 static void gpio_toggle_native(wasm_exec_env_t exec_env)
 {
     ARG_UNUSED(exec_env);
-    if (!gpio_dev) {
-        return;
-    }
-    gpio_pin_toggle(gpio_dev, gpio_pin);
+    //if (!gpio_dev) return;
+
+    k_mutex_lock(&gpio_mutex, K_FOREVER);
+    gpio_pin_toggle(led.port, led.pin);
+    k_mutex_unlock(&gpio_mutex);
+
     k_msleep(1000);
 }
 
-static int32_t should_stop_native(wasm_exec_env_t exec_env)
+/* env.uart_print(i32 offset)  */
+static void uart_print_native(wasm_exec_env_t exec_env, uint32_t offset)
+{
+    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
+    if (!wasm_runtime_validate_app_str_addr(module_inst, offset)) return;
+
+    const char *s = (const char *)wasm_runtime_addr_app_to_native(module_inst, offset);
+    if (!s) return;
+
+    k_mutex_lock(&uart_mutex, K_FOREVER);
+    printk("%s", s);
+    k_mutex_unlock(&uart_mutex);
+
+    k_sleep(K_MSEC(1000));
+}
+
+/* Native import: env.led_toggle(i32 duration_ms) */
+static void led_toggle_native(wasm_exec_env_t exec_env, uint32_t duration_ms)
 {
     ARG_UNUSED(exec_env);
-    module_slot_t *slot = slot_from_current_thread();
-    return (slot && slot->stop_requested) ? 1 : 0;
+
+    k_mutex_lock(&gpio_mutex, K_FOREVER);
+
+    printk("LED ON (thread %p)\n", k_current_get());
+    gpio_pin_set_dt(&led, 1);
+    k_sleep(K_MSEC(duration_ms));
+    printk("LED OFF (thread %p)\n", k_current_get());
+    gpio_pin_set_dt(&led, 0);
+
+    k_mutex_unlock(&gpio_mutex);
 }
+
 
 static NativeSymbol native_symbols[] = {
     { "gpio_toggle",  gpio_toggle_native,  "()"  },
-    { "should_stop", (void *)should_stop_native, "()i" },
+    { "uart_print", (void *)uart_print_native, "(i)" },
+    { "led_toggle", (void *)led_toggle_native, "(i)" },
 };
 
 /* ------------------------ Param parsing ------------------------ */
@@ -333,6 +372,71 @@ static void slot_cleanup(module_slot_t *slot)
     slot->wasm_size = 0;
 }
 
+static void stop_dwork_handler(struct k_work *work)
+{
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+    module_slot_t *slot = CONTAINER_OF(dwork, module_slot_t, stop_dwork);
+
+    k_mutex_lock(&load_mutex, K_FOREVER);
+
+    /* Se STOP soft ha già funzionato (o slot non valido), non fare nulla */
+    if (!slot->used || !slot->busy || !slot->inst || !slot->terminate_requested) {
+        k_mutex_unlock(&load_mutex);
+        return;
+    }
+
+    /* Escalation: stop hard del thread worker */
+    slot_abort_worker(slot); /* calls k_thread_abort() and sets slot->tid=NULL */  /* [web:622] */
+
+    /*
+     * Riporta lo slot a "LOADED" mantenendo il modulo caricato:
+     * deinstanzia e reinstanzia lo stesso wasm_module_t.
+     */
+    if (slot->exec_env) {
+        wasm_runtime_destroy_exec_env(slot->exec_env);
+        slot->exec_env = NULL;
+    }
+    if (slot->inst) {
+        wasm_runtime_deinstantiate(slot->inst);
+        slot->inst = NULL;
+    }
+
+    char error_buf[128];
+    slot->inst = wasm_runtime_instantiate(slot->module,
+                                         CONFIG_APP_STACK_SIZE,
+                                         CONFIG_APP_HEAP_SIZE,
+                                         error_buf, sizeof(error_buf));
+
+    if (slot->inst) {
+        slot->exec_env = wasm_runtime_create_exec_env(slot->inst, CONFIG_APP_STACK_SIZE);
+        if (!slot->exec_env) {
+            /* Se fallisce exec_env, degrada a slot vuoto (coerente) */
+            wasm_runtime_deinstantiate(slot->inst);
+            slot->inst = NULL;
+        }
+    }
+
+    /* Stato */
+    slot->busy = false;
+    slot->stop_requested = false;
+    slot->terminate_requested = false;
+    slot->state = slot->inst ? MOD_LOADED : MOD_EMPTY;
+
+    /* Ricrea il worker thread (necessario dopo abort) */
+    slot_ensure_worker(slot);
+
+    /* RESULT finale coerente con il resto del protocollo */
+    const char *func = slot->req.func_name[0] ? slot->req.func_name : "<unknown>";
+    char out[256];
+    snprintf(out, sizeof(out),
+             "RESULT status=STOPPED forced=1 module_id=%s func=%s\n",
+             slot->module_id, func);
+    agent_write_str(out);
+
+    k_mutex_unlock(&load_mutex);
+}
+
+
 static module_slot_t *slot_alloc(const char *module_id)
 {
     for (int i = 0; i < MAX_MODULES; i++) {
@@ -343,14 +447,19 @@ static module_slot_t *slot_alloc(const char *module_id)
             strncpy(slot->module_id, module_id, sizeof(slot->module_id) - 1);
 
             k_sem_init(&slot->work_sem, 0, 1);
-            slot_ensure_worker(slot);
 
+
+            slot_ensure_worker(slot);
+            k_work_init_delayable(&slot->stop_dwork, stop_dwork_handler);
+            slot->terminate_requested = false;
             slot->state = MOD_EMPTY;
             return slot;
         }
     }
     return NULL;
 }
+
+
 
 
 /* ------------------------ Worker thread ------------------------ */
@@ -434,30 +543,46 @@ static void module_worker(void *p1, void *p2, void *p3)
         slot->state = MOD_RUNNING;
         bool ok = wasm_runtime_call_wasm(slot->exec_env, fn, argc, argv_local);
 
+        k_work_cancel_delayable_sync(&slot->stop_dwork, &slot->stop_sync);
+        slot->terminate_requested = false;
+
         const char *exc = NULL;
         if (!ok) {
             exc = wasm_runtime_get_exception(slot->inst);
         }
 
         char out[256];
+        bool stopped = false;
+
         if (!ok) {
-            snprintf(out, sizeof(out),
-                     "RESULT status=EXCEPTION module_id=%s func=%s msg=\"%s\"\n",
-                     slot->module_id, req.func_name, exc ? exc : "<none>");
-        } else if (slot->stop_requested) {
-            snprintf(out, sizeof(out),
-                     "RESULT status=STOPPED module_id=%s func=%s\n",
-                     slot->module_id, req.func_name);
+            /* se STOP ha chiamato wasm_runtime_terminate(), WAMR tipicamente setta
+            un'eccezione tipo "terminated by user" */
+            if (exc && strstr(exc, "terminated") != NULL) {
+                stopped = true;
+            }
+
+            if (stopped) {
+                snprintf(out, sizeof(out),
+                        "RESULT status=STOPPED module_id=%s func=%s msg=\"%s\"\n",
+                        slot->module_id, req.func_name, exc);
+                /* important: lascia l'istanza pulita per future START */
+                wasm_runtime_clear_exception(slot->inst);
+            } else {
+                snprintf(out, sizeof(out),
+                        "RESULT status=EXCEPTION module_id=%s func=%s msg=\"%s\"\n",
+                        slot->module_id, req.func_name, exc ? exc : "<none>");
+            }
         } else if (result_count > 0) {
             uint32_t ret_i32 = argv_local[0];
             snprintf(out, sizeof(out),
-                     "RESULT status=OK module_id=%s func=%s ret_i32=%lu\n",
-                     slot->module_id, req.func_name, (unsigned long)ret_i32);
+                    "RESULT status=OK module_id=%s func=%s ret_i32=%lu\n",
+                    slot->module_id, req.func_name, (unsigned long)ret_i32);
         } else {
             snprintf(out, sizeof(out),
-                     "RESULT status=OK module_id=%s func=%s\n",
-                     slot->module_id, req.func_name);
+                    "RESULT status=OK module_id=%s func=%s\n",
+                    slot->module_id, req.func_name);
         }
+
 
         agent_write_str(out);
 
@@ -772,7 +897,11 @@ static void handle_stop_cmd(const char *line)
         return;
     }
 
-    slot->stop_requested = true;
+    slot->terminate_requested = true;
+    /* prova soft-stop */
+    wasm_runtime_terminate(slot->inst);
+    /* se entro STOP_FORCE_DELAY_MS non arriva RESULT dal worker, scatta escalation */
+    k_work_reschedule(&slot->stop_dwork, K_MSEC(STOP_FORCE_DELAY_MS));
     agent_write_str("STOP_OK status=PENDING\n");
 }
 
