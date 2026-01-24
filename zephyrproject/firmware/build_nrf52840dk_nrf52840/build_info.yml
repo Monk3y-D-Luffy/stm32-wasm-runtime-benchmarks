@@ -1,0 +1,63 @@
+cmake:
+  application:
+    configuration-dir: 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware'
+    source-dir: 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware'
+  board:
+    name: 'nrf52840dk'
+    path:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/boards/nordic/nrf52840dk'
+    qualifiers: 'nrf52840'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/bindings'
+    files:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840.dts'
+    include-dirs:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/ambiq/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/atmel/include'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/bouffalolab/include'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/bouffalolab/include/zephyr'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/gigadevice/include'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/microchip/include'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/microchip/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/nuvoton/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/nxp/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/stm32/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/ti/dts'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/common'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/vendor'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/rx'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/x86'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/xtensa'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/sparc'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/riscv'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/posix'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm64'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arc'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts'
+  kconfig:
+    files:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840_defconfig'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware/prj.conf'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware/boards/nrf52840dk_nrf52840.conf'
+    user-files:
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware/prj.conf'
+     - 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/firmware/boards/nrf52840dk_nrf52840.conf'
+  toolchain:
+    name: 'zephyr'
+    path: 'C:/Users/Salvo/zephyr-sdk-0.17.4'
+  vendor-specific:
+    nordic:
+      svdfile: 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/modules/hal/nordic/nrfx/mdk/nrf52840.svd'
+  zephyr:
+    version: '4.3.99'
+    zephyr-base: 'C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr'
+version: '0.1.0'
+west:
+  command: 'C:\Users\Salvo\stm32-wasm-runtime-benchmarks\zephyrproject\.venv\Scripts\west build . -b nrf52840dk/nrf52840 -d build_nrf52840dk_nrf52840 --pristine'
+  topdir: 'C:\Users\Salvo\stm32-wasm-runtime-benchmarks\zephyrproject'
+  version: '1.5.0'

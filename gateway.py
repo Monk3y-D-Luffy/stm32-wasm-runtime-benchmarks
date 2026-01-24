@@ -20,8 +20,9 @@ except ImportError:
 # Mappa device -> endpoint fisico/emulato
 
 DEVICE_ENDPOINTS = {
-    "nucleo": "COM4",                # UART on Windows
-    "disco":  "tcp:localhost:3456",  # TCP socket (Renode bridge)
+    "nucleo_f4": "COM3",
+    "nucleo_f7": "COM4",                # UART on Windows
+    "renode":  "tcp:localhost:3456",  # TCP socket (Renode bridge)
 }
 
 
@@ -125,7 +126,7 @@ def recv_exact(conn, n: int) -> bytes:
         buf += chunk
     return bytes(buf)
 
-def gw_deploy_bytes(device_port: str, module_id: str, data: bytes,
+def gw_load_bytes(device_port: str, module_id: str, data: bytes,
                     replace: bool = False, replace_victim: str | None = None):
     size = len(data)
     crc32 = binascii.crc32(data) & 0xFFFFFFFF
@@ -206,10 +207,7 @@ def compile_to_wasm(source_c: str, out_wasm: str):
         "-O3",
         "-nostdlib",
         "-Wl,--no-entry",
-        "-Wl,--initial-memory=65536",
-        "-Wl,--max-memory=65536",
-        "-Wl,--stack-first",
-        "-Wl,-z,stack-size=2048",
+        "-Wl,-z,stack-size=16384",
         source_c,
         "-o",
         out_wasm,
@@ -232,8 +230,7 @@ def compile_to_aot(wasm_path: str, out_aot: str):
     cmd = [
         WAMRC_BIN,
         "--target=thumbv7em",
-        "--cpu=cortex-m4",
-        "--target-abi=gnu",
+        "--target-abi=eabi",
         "-o", out_aot,
         wasm_path,
     ]
@@ -251,7 +248,7 @@ def compile_to_aot(wasm_path: str, out_aot: str):
 
 # Operazioni verso l'agent 
 
-def gw_deploy(device_port: str, module_id: str, wasm_or_aot_path: str,
+def gw_load(device_port: str, module_id: str, wasm_or_aot_path: str,
               replace: bool = False, replace_victim: str | None = None):
     if not os.path.isfile(wasm_or_aot_path):
         return {"ok": False, "error": f"file non trovato: {wasm_or_aot_path}"}
@@ -259,7 +256,7 @@ def gw_deploy(device_port: str, module_id: str, wasm_or_aot_path: str,
     with open(wasm_or_aot_path, "rb") as f:
         data = f.read()
 
-    return gw_deploy_bytes(device_port, module_id, data,
+    return gw_load_bytes(device_port, module_id, data,
                            replace=replace, replace_victim=replace_victim)
 
 
@@ -268,46 +265,51 @@ def gw_start(device_port: str, module_id: str, func_name: str,
     t = open_transport(device_port)
     try:
         t.flush_input()
-        if func_args:
-            line = (
-                f"START module_id={module_id} "
-                f"func={func_name} args=\"{func_args}\""
-            )
+        line = f"START module_id={module_id}"
+
+        # 1) Se l'host specifica func, passa func (+args opzionali)
+        if func_name:
+            line += f" func={func_name}"
+            if func_args:
+                line += f' args="{func_args}"'
+
+        # 2) Se func non è specificata:
         else:
-            line = (
-                f"START module_id={module_id} "
-                f"func={func_name}"
-            )
+            # Consenti args sul default entrypoint (app_main) - policy firmware
+            if func_args:
+                line += f' args="{func_args}"'
+
         print(">>", line)
         t.write_line(line)
 
-        while True:
-            resp = read_until_prefix(
-                t, ["START_OK", "RESULT", "ERROR"], timeout=3.0
-            )
-            if resp is None:
-                return {"ok": False,
-                        "error": "timeout in attesa di START_OK/RESULT/ERROR"}
+        # Prima risposta: può essere START_OK oppure un RESULT/ERROR immediato
+        resp = read_until_prefix(t, ["START_OK", "RESULT", "ERROR"], timeout=3.0)
+        if resp is None:
+            return {"ok": False, "error": "timeout in attesa di START_OK/RESULT/ERROR"}
 
-            if resp.startswith("ERROR"):
+        if resp.startswith("ERROR"):
+            return {"ok": False, "error": resp}
+
+        if resp.startswith("RESULT"):
+            # Qualsiasi RESULT prima di START_OK è risposta finale (successo o errore)
+            if "status=OK" in resp:
+                return {"ok": True, "detail": resp}
+            else:
                 return {"ok": False, "error": resp}
 
-            if resp.startswith("RESULT"):
-                if ("status=NO_MODULE" in resp
-                        or "status=BUSY" in resp
-                        or "status=NO_FUNC" in resp):
-                    return {"ok": False, "error": resp}
-                continue
-
-            break  # START_OK
-
+        # START_OK
         if not wait_result:
             return {"ok": True, "detail": "START_OK"}
 
         resp2 = read_until_prefix(t, ["RESULT"], timeout=result_timeout)
         if resp2 is None:
             return {"ok": False, "error": "timeout in attesa di RESULT"}
-        return {"ok": True, "detail": resp2}
+
+        if "status=OK" in resp2:
+            return {"ok": True, "detail": resp2}
+        else:
+            return {"ok": False, "error": resp2}
+
     finally:
         t.close()
 
@@ -356,12 +358,12 @@ def gw_status(device_port: str):
         t.close()
 
 
-# build_and_deploy 
+# build_and_load 
 # Modalità: wasm oppure aot
-#   wasm: compila C -> wasm e deploya il wasm
-#   aot:  compila C -> wasm, poi wasm -> aot, deploya l'aot
+#   wasm: compila C -> wasm e carica il wasm
+#   aot:  compila C -> wasm, poi wasm -> aot, carica l'aot
 
-def gw_build_and_deploy(device_port: str, module_id: str,
+def gw_build_and_load(device_port: str, module_id: str,
                         source_path: str, mode: str, replace=False, replace_victim=None):
    
     source_path = os.path.abspath(source_path)
@@ -386,10 +388,10 @@ def gw_build_and_deploy(device_port: str, module_id: str,
             deploy_path = aot_path
             extra["aot_path"] = aot_path
 
-        res_dep = gw_deploy(device_port, module_id, deploy_path,
+        res_dep = gw_load(device_port, module_id, deploy_path,
                     replace=replace, replace_victim=replace_victim)
 
-        return {"step": "deploy", **extra, **res_dep}
+        return {"step": "load", **extra, **res_dep}
 
 
 # Server TCP del gateway
@@ -415,7 +417,7 @@ def handle_client(conn, addr):
         port = DEVICE_ENDPOINTS[device]
         cmd = req.get("cmd")
 
-        if cmd == "deploy":
+        if cmd == "load":
             blob_size = int(req["blob_size"])
             blob = bytes(rest)
             if len(blob) < blob_size:
@@ -433,7 +435,7 @@ def handle_client(conn, addr):
             replace = bool(req.get("replace", False))
             replace_victim = req.get("replace_victim")
 
-            resp = gw_deploy_bytes(port, req["module_id"], blob,
+            resp = gw_load_bytes(port, req["module_id"], blob,
                                 replace=replace, replace_victim=replace_victim)
 
 
@@ -441,7 +443,7 @@ def handle_client(conn, addr):
             resp = gw_start(
                 port,
                 req["module_id"],
-                req["func_name"],
+                req.get("func_name", ""),
                 req.get("func_args", ""),
                 bool(req.get("wait_result", False)),
                 float(req.get("result_timeout", 10.0)),
@@ -454,7 +456,7 @@ def handle_client(conn, addr):
             )
         elif cmd == "status":
             resp = gw_status(port)
-        elif cmd == "build_and_deploy":
+        elif cmd == "build_and_load":
             mode = req.get("mode", "wasm")
 
             source_size = int(req["source_size"])
@@ -479,7 +481,7 @@ def handle_client(conn, addr):
 
                 replace = bool(req.get("replace", False))
                 replace_victim = req.get("replace_victim")
-                resp = gw_build_and_deploy(
+                resp = gw_build_and_load(
                     port,
                     req["module_id"],
                     source_path,

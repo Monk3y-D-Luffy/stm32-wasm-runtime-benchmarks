@@ -1,0 +1,9 @@
+source "Kconfig.zephyr"
+
+menu "WAMR"
+config WAMR_GLOBAL_POOL_SIZE
+    int "WAMR global pool size (bytes)"
+    default 65536
+help
+  Size of the global WAMR heap pool used by Alloc_With_Pool.
+endmenu

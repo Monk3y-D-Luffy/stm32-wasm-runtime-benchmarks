@@ -37,7 +37,7 @@ static void run_wasm_toggle_forever(void) {
     r = m3_FindFunction(&f, rt, "toggle_forever");
     if (r || !f) return;
 
-    (void)m3_CallV(f);   // non ritorna finché la VM gira
+    (void)m3_CallV(f);    /* does not return while the VM runs */
 }
 
 static inline void gpio_pa5_init(void) {
@@ -50,6 +50,6 @@ void main(void) {
     gpio_pa5_init();
     run_wasm_toggle_forever();
     while (1) {
-        /* se mai tornasse, non fare altro */
+        /* If it ever returns, do nothing */
     }
 }

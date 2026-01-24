@@ -1,0 +1,34 @@
+empty_file.o: \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/misc/empty_file.c \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840.dts \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm/nordic/nrf52840_qiaa.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/common/mem.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm/nordic/nrf52840.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm/armv7-m.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/common/skeleton.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/vendor/nordic/nrf_common.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/adc/adc.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/dt-util.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_macro.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_internal.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_loops.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_listify.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_internal_is_eq.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_internal_util_inc.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_internal_util_dec.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/sys/util_internal_util_x2.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/gpio/gpio.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/i2c/i2c.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/input/input-event-codes.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/pinctrl/nrf-pinctrl.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/pwm/pwm.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/sensor/qdec_nrf.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/common/freq.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/arm/nordic/override.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/adc/nrf-saadc-v3.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/adc/nrf-saadc-v2.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/adc/nrf-saadc.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/regulator/nrf5x.h \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/dts/vendor/nordic/nrf52840_partition.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840-pinctrl.dtsi \
+ C:/Users/Salvo/stm32-wasm-runtime-benchmarks/zephyrproject/zephyr/include/zephyr/dt-bindings/gpio/arduino-header-r3.h

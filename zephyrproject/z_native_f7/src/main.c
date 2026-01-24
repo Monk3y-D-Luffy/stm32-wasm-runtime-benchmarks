@@ -1,9 +1,9 @@
 #include <zephyr/kernel.h>
 #include <stm32f7xx.h>
 
-#include <arm_cmse.h> // o core_cm7.h
+//#include <arm_cmse.h> // o core_cm7.h
 #include <core_cm7.h>
-#include "stm32f7xx_hal.h"  // o h7xx
+#include "stm32f7xx_hal.h"  /* for __HAL_FLASH_PREFETCH_BUFFER_ENABLE() */
 
 void enable_caches(void) {
     SCB_EnableICache();

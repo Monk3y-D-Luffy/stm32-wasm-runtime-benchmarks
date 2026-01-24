@@ -19,7 +19,8 @@
 /* Se non esiste nella build, resta NULL e non rompe il link */
 extern struct sys_heap _system_heap __attribute__((weak));
 
-#define WAMR_GLOBAL_POOL_SIZE (216 * 1024)
+//#define WAMR_GLOBAL_POOL_SIZE (216 * 1024)
+#define WAMR_GLOBAL_POOL_SIZE CONFIG_WAMR_GLOBAL_POOL_SIZE
 static uint8_t g_wamr_pool[WAMR_GLOBAL_POOL_SIZE] __attribute__((aligned(8)));
 
 /* ------------------------ Config ------------------------ */
@@ -541,6 +542,7 @@ static void module_worker(void *p1, void *p2, void *p3)
         }
 
         slot->state = MOD_RUNNING;
+        wasm_runtime_clear_exception(slot->inst);
         bool ok = wasm_runtime_call_wasm(slot->exec_env, fn, argc, argv_local);
 
         k_work_cancel_delayable_sync(&slot->stop_dwork, &slot->stop_sync);
@@ -585,7 +587,8 @@ static void module_worker(void *p1, void *p2, void *p3)
 
 
         agent_write_str(out);
-
+        
+        wasm_runtime_clear_exception(slot->inst);
         slot->busy = false;
         slot->stop_requested = false;
         slot->state = slot->inst ? MOD_LOADED : MOD_EMPTY;
@@ -802,21 +805,25 @@ out:
 
 static void handle_start_cmd(const char *line)
 {
-    char func_name[64];
+    char func_name[64] = {0};
     char args_buf[64];
     char module_id_buf[32];
 
-    uint32_t argc = 0;
+    uint32_t argc_local = 0;
+    uint32_t argv_local[MAX_CALL_ARGS] = {0};
 
     const char *p_mod  = find_param(line, "module_id");
     const char *p_func = find_param(line, "func");
-    if (!p_mod || !p_func) {
-        agent_write_str("RESULT status=BAD_PARAMS msg=\"missing module_id/func\"\n");
+    if (!p_mod) {
+        agent_write_str("RESULT status=BAD_PARAMS msg=\"missing module_id\"\n");
         return;
     }
 
     copy_param_value(p_mod, module_id_buf, sizeof(module_id_buf));
-    copy_param_value(p_func, func_name, sizeof(func_name));
+    if (p_func) {
+        copy_param_value(p_func, func_name, sizeof(func_name));
+        func_name[sizeof(func_name) - 1] = '\0';
+    }
 
     module_slot_t *slot = slot_find(module_id_buf);
     if (!slot || !slot->inst) {
@@ -846,9 +853,7 @@ static void handle_start_cmd(const char *line)
         return;
     }
 
-    memset(&slot->req, 0, sizeof(slot->req));
-    strncpy(slot->req.func_name, func_name, sizeof(slot->req.func_name) - 1);
-
+    /* 1) Parse args -> argc_local/argv_local */
     const char *p_args = find_param(line, "args");
     if (p_args && *p_args == '\"') {
         p_args++;
@@ -860,25 +865,46 @@ static void handle_start_cmd(const char *line)
             args_buf[len] = '\0';
 
             char *tok = strtok(args_buf, ",");
-            while (tok && argc < MAX_CALL_ARGS) {
+            while (tok && argc_local < MAX_CALL_ARGS) {
                 char *eq = strchr(tok, '=');
                 if (eq) {
                     int val = atoi(eq + 1);
-                    slot->req.argv[argc++] = (uint32_t)val;
+                    argv_local[argc_local++] = (uint32_t)val;
                 }
                 tok = strtok(NULL, ",");
             }
         }
     }
-    slot->req.argc = argc;
+
+    /* 2) Default entrypoint */
+    if (func_name[0] == '\0') {
+        if (!wasm_runtime_lookup_function(slot->inst, "app_main")) {
+            if (argc_local > 0) {
+                agent_write_str("RESULT status=NO_ENTRYPOINT msg=\"args require app_main\"\n");
+            } else {
+                agent_write_str("RESULT status=NO_ENTRYPOINT msg=\"expected app_main\"\n");
+            }
+            return;
+        }
+        strncpy(func_name, "app_main", sizeof(func_name) - 1);
+        func_name[sizeof(func_name) - 1] = '\0';
+    }
+
+    /* 3) Fill request */
+    memset(&slot->req, 0, sizeof(slot->req));
+    strncpy(slot->req.func_name, func_name, sizeof(slot->req.func_name) - 1);
+    slot->req.func_name[sizeof(slot->req.func_name) - 1] = '\0'; 
+    slot->req.argc = argc_local;
+    for (uint32_t i = 0; i < argc_local; i++) {
+        slot->req.argv[i] = argv_local[i];
+    }
 
     slot->stop_requested = false;
     slot->busy = true;
-
     k_sem_give(&slot->work_sem);
-
     agent_write_str("START_OK\n");
 }
+
 
 static void handle_stop_cmd(const char *line)
 {

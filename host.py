@@ -55,13 +55,13 @@ def pretty_print_response(resp):
 
 # comandi base
 
-def cmd_deploy(args):
+def cmd_load(args):
     with open(args.wasm, "rb") as f:
         blob = f.read()
 
     crc32 = binascii.crc32(blob) & 0xFFFFFFFF
     payload = {
-        "cmd": "deploy",
+        "cmd": "load",
         "device": args.device,
         "module_id": args.module_id,
         "blob_size": len(blob),
@@ -86,11 +86,12 @@ def cmd_start(args):
         "cmd": "start",
         "device": args.device,
         "module_id": args.module_id,
-        "func_name": args.func_name,
         "func_args": args.func_args or "",
         "wait_result": bool(args.wait_result),
         "result_timeout": float(args.result_timeout),
     }
+    if args.func_name:
+        payload["func_name"] = args.func_name
     timeout = args.result_timeout + 5.0 if args.wait_result else 10.0
     
     t0 = time.perf_counter()
@@ -134,14 +135,14 @@ def cmd_status(args):
     pretty_print_response(resp)
 
 
-def cmd_build_and_deploy(args):
+def cmd_build_and_load(args):
     with open(args.source, "rb") as f:
         blob = f.read()
 
     crc32 = binascii.crc32(blob) & 0xFFFFFFFF
 
     payload = {
-        "cmd": "build_and_deploy",
+        "cmd": "build_and_load",
         "device": args.device,
         "module_id": args.module_id,
         "mode": args.mode,
@@ -183,7 +184,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # deploy
-    p_deploy = subparsers.add_parser("deploy", help="Deploy di un modulo wasm/aot")
+    p_deploy = subparsers.add_parser("load", help="Deploy di un modulo wasm/aot")
     p_deploy.add_argument("--module-id", required=True)
     p_deploy.add_argument("--wasm", required=True, help="File .wasm o .aot")
     p_deploy.add_argument(
@@ -195,12 +196,12 @@ def main():
         "--replace-victim",
         help="Module ID da abortire e rimpiazzare quando gli slot sono pieni",
     )
-    p_deploy.set_defaults(func=cmd_deploy)
+    p_deploy.set_defaults(func=cmd_load)
 
     # start
     p_start = subparsers.add_parser("start", help="Start di una funzione")
     p_start.add_argument("--module-id", required=True)
-    p_start.add_argument("--func-name", required=True)
+    p_start.add_argument("--func-name")
     p_start.add_argument("--func-args", help='Argomenti "a=1,b=2"')
     p_start.add_argument(
         "--wait-result",
@@ -232,7 +233,7 @@ def main():
 
     # build-and-deploy
     p_build = subparsers.add_parser(
-        "build-and-deploy",
+        "build_and_load",
         help="Compila un sorgente C in WASM/AOT e fa deploy sul device",
     )
     p_build.add_argument("--module-id", required=True, help="ID logico del modulo")
@@ -249,7 +250,7 @@ def main():
     )
     p_build.add_argument("--replace", action="store_true")
     p_build.add_argument("--replace-victim")
-    p_build.set_defaults(func=cmd_build_and_deploy)
+    p_build.set_defaults(func=cmd_build_and_load)
 
     args = parser.parse_args()
     args.func(args)
